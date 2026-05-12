@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+.DS_Store
+*.log
+.expo_scaffold_tmp/
+legacy_android_kotlin/
