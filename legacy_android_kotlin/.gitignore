@@ -1,0 +1,45 @@
+*.iml
+.DS_Store
+
+# Gradle / Kotlin build state
+.gradle/
+.kotlin/
+build/
+*/build/
+
+# Android local machine configuration
+local.properties
+
+# Android Studio / IntelliJ user-specific files
+.idea/caches/
+.idea/libraries/
+.idea/.name
+.idea/AndroidProjectSystem.xml
+.idea/codeStyles/
+.idea/copilotDiffState.xml
+.idea/deploymentTargetSelector.xml
+.idea/modules.xml
+.idea/studiobot.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/misc.xml
+.idea/inspectionProfiles/
+
+# Native / generated artifacts
+.externalNativeBuild/
+.cxx/
+captures/
+
+# Signing material and local secrets
+*.jks
+*.keystore
+*.p12
+keystore.properties
+signing.properties
+
+# Packaged outputs
+*.apk
+*.ap_
+*.aab
+

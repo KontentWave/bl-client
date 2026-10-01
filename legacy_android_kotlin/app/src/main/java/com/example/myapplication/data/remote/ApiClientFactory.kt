@@ -1,0 +1,52 @@
+package com.example.myapplication.data.remote
+
+import com.example.myapplication.data.remote.ReportApi
+import com.example.myapplication.data.remote.model.ApiMeta
+import com.example.myapplication.data.remote.model.ApiMetaAdapter
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
+
+object ApiClientFactory {
+    private val gson: Gson = GsonBuilder()
+        .registerTypeAdapter(ApiMeta::class.java, ApiMetaAdapter())
+        .create()
+
+    fun createAuthApi(baseUrl: String): AuthApi {
+        return createRetrofit(baseUrl).create(AuthApi::class.java)
+    }
+
+    fun createReportApi(baseUrl: String): ReportApi {
+        return createRetrofit(baseUrl).create(ReportApi::class.java)
+    }
+
+    fun createBlacklistApi(baseUrl: String): BlacklistApi {
+        return createRetrofit(baseUrl).create(BlacklistApi::class.java)
+    }
+
+    private fun createRetrofit(baseUrl: String): Retrofit {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BASIC
+        }
+
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .addInterceptor(loggingInterceptor)
+            .build()
+
+        return Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+    }
+
+    fun gson(): Gson = gson
+}
+

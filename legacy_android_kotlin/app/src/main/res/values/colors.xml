@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="seed_primary">#7B1FA2</color>
+    <color name="seed_primary_dark">#D9B8F2</color>
+    <color name="seed_secondary">#5F5874</color>
+    <color name="surface_light">#FFF7FB</color>
+    <color name="surface_dark">#15121A</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
