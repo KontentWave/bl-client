@@ -5,6 +5,16 @@ import org.junit.Test
 
 class CanonicalPayloadFactoryTest {
     @Test
+    fun normalizedReport_matchesGoldenPhpJsonIncludingEscapes() {
+        val number = com.example.myapplication.phone.PhoneNumberNormalizer.normalize("0900 000 001")
+        assertEquals(
+            "{\"client_phone_number\":\"+421900000001\",\"feature\":\"no_show\"," +
+                "\"public_key\":\"pem\\/with\\\"quotes\\\"\\\\and\\n\\t\\u0001\"}",
+            CanonicalPayloadFactory.createReport(checkNotNull(number), "no_show", "pem/with\"quotes\"\\and\n\t\u0001"),
+        )
+    }
+
+    @Test
     fun create_returnsCompactJsonInStableFieldOrder() {
         val payload = CanonicalPayloadFactory.create(
             challengeId = "0d5f35ea-331d-4df1-b9d6-3df7ab7fdc7c",
@@ -86,4 +96,3 @@ class CanonicalPayloadFactoryTest {
         )
     }
 }
-

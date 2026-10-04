@@ -1,5 +1,7 @@
 package com.example.myapplication.security
 
+import com.example.myapplication.phone.PhoneNumberNormalizer
+
 interface SignedRequestFactory {
     fun createVerifyRequest(challengeId: String): SignedRequestPayload
 
@@ -18,6 +20,9 @@ class SecuritySignedRequestFactory(
     }
 
     override fun createReportRequest(clientPhoneNumber: String, feature: String): SignedRequestPayload {
+        require(PhoneNumberNormalizer.normalize(clientPhoneNumber) == clientPhoneNumber) {
+            "Normalize the report number before signing and sending it."
+        }
         val normalizedPublicKey = existingPublicKey()
         val canonicalPayload = CanonicalPayloadFactory.createReport(
             clientPhoneNumber = clientPhoneNumber,

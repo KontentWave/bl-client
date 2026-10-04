@@ -5,6 +5,7 @@ import com.example.myapplication.data.BlacklistQueryRepository
 import com.example.myapplication.data.BlacklistQueryRepositoryProvider
 import com.example.myapplication.data.BlacklistQueryResult
 import com.example.myapplication.session.SessionRecoveryProvider
+import com.example.myapplication.phone.PhoneNumberNormalizer
 
 class IncomingCallProcessor(
     private val blacklistQueryRepository: BlacklistQueryRepository,
@@ -26,7 +27,7 @@ class IncomingCallProcessor(
             )
         )
 
-        val nonBlankRawNumber = rawIncomingNumber?.trim()?.takeIf { it.isNotBlank() }
+        val nonBlankRawNumber = rawIncomingNumber?.takeIf { it.isNotBlank() }
         if (nonBlankRawNumber == null) {
             shieldLiveStatusSink.record(
                 ShieldLiveStatus(
@@ -46,7 +47,7 @@ class IncomingCallProcessor(
                 ShieldLiveStatus(
                     stage = ShieldLiveStage.NormalizationFailed,
                     rawIncomingNumber = nonBlankRawNumber,
-                    errorMessage = "The incoming caller number could not be normalized to E.164.",
+                    errorMessage = PhoneNumberNormalizer.INVALID_INPUT_MESSAGE,
                     overlayState = initialOverlayPresentation.state,
                     overlayMessage = initialOverlayPresentation.message,
                     updatedAtEpochMillis = timestamp,

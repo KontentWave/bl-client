@@ -9,6 +9,50 @@ import org.junit.Test
 
 class IncomingCallProcessorTest {
     @Test
+    fun supportedFormatsQueryExactlyTheGoldenHashOncePerExplicitCallEvent() = runBlocking {
+        val queried = mutableListOf<String>()
+        val repository = object : BlacklistQueryRepository {
+            override suspend fun checkTargetHash(targetHash: String): BlacklistQueryResult {
+                queried += targetHash
+                return BlacklistQueryResult.Success(targetHash, emptyList())
+            }
+        }
+        val sink = RecordingShieldLiveStatusSink()
+        val processor = IncomingCallProcessor(
+            repository, CallerNumberNormalizer(), CallerNumberHasher(), sink, RecordingShieldWarningPresenter(),
+        )
+        for (vector in com.example.myapplication.phone.PhoneNumberVectors.load().filter { it.normalized != null }) {
+            val count = queried.size
+            processor.processIncomingNumber(vector.raw)
+            assertEquals(count + 1, queried.size)
+            assertEquals(vector.hash, queried.last())
+            assertEquals(vector.normalized, sink.last().normalizedNumber)
+            assertEquals(ShieldLiveStage.NoMatch, sink.last().stage)
+        }
+    }
+
+    @Test
+    fun unsupportedAndUnavailableNumbersNeverQuery() = runBlocking {
+        val repository = object : BlacklistQueryRepository {
+            override suspend fun checkTargetHash(targetHash: String): BlacklistQueryResult =
+                error("Unsupported input must not query")
+        }
+        val sink = RecordingShieldLiveStatusSink()
+        val processor = IncomingCallProcessor(
+            repository, CallerNumberNormalizer(), CallerNumberHasher(), sink, RecordingShieldWarningPresenter(),
+        )
+        processor.processIncomingNumber(null)
+        assertEquals(ShieldLiveStage.MissingIncomingNumber, sink.last().stage)
+        for (vector in com.example.myapplication.phone.PhoneNumberVectors.load().filter { it.normalized == null }) {
+            processor.processIncomingNumber(vector.raw)
+            assertEquals(
+                if (vector.raw.isBlank()) ShieldLiveStage.MissingIncomingNumber else ShieldLiveStage.NormalizationFailed,
+                sink.last().stage,
+            )
+        }
+    }
+
+    @Test
     fun processIncomingNumber_recordsMissingNumberWhenAndroidDoesNotProvideCallerId() = runBlocking {
         val sink = RecordingShieldLiveStatusSink()
         val processor = IncomingCallProcessor(

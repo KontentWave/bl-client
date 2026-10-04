@@ -86,7 +86,7 @@
     <string name="report_back_button">Back to verified home</string>
     <string name="report_client_phone_label">Target client phone number</string>
     <string name="report_client_phone_placeholder">+421900123456</string>
-    <string name="report_client_phone_supporting_text">Enter the client number in a format Laravel can normalize to E.164.</string>
+    <string name="report_client_phone_supporting_text">Use + or 00 international format, Slovak 0 trunk format, or a bare 421 country prefix. Spaces and hyphens are allowed. Bare local numbers and extensions are not supported.</string>
     <string name="report_feature_title">Report feature</string>
     <string name="report_feature_supporting_text">Select one immutable backend-defined feature key.</string>
     <string name="report_submit_button">Submit signed report</string>
