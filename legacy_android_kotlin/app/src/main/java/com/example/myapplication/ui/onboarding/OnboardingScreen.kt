@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.R
+import com.example.myapplication.ui.CooldownNotice
 import com.example.myapplication.ui.theme.BlacklistClientTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -121,10 +122,11 @@ fun OnboardingScreen(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+            CooldownNotice(uiState.retryAfterSeconds)
             if (!uiState.hasInitiatedChallenge && !uiState.isVerified) {
                 Button(
                     onClick = onStartVerificationClick,
-                    enabled = uiState.adUrl.isNotBlank() && !uiState.isSubmitting,
+                    enabled = uiState.adUrl.isNotBlank() && !uiState.isSubmitting && !uiState.isVerifying && uiState.retryAfterSeconds == 0L,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(OnboardingTestTags.START_VERIFICATION_BUTTON)
@@ -205,7 +207,7 @@ fun OnboardingScreen(
                         )
                         Button(
                             onClick = onVerifyOtpClick,
-                            enabled = uiState.otp.length == 6 && !uiState.isVerifying && !uiState.isChallengeLocked,
+                            enabled = uiState.otp.length == 6 && !uiState.isVerifying && !uiState.isSubmitting && !uiState.isChallengeLocked && uiState.retryAfterSeconds == 0L,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag(OnboardingTestTags.VERIFY_OTP_BUTTON)
@@ -225,6 +227,7 @@ fun OnboardingScreen(
                         }
                         TextButton(
                             onClick = onStartNewChallengeClick,
+                            enabled = !uiState.isSubmitting && !uiState.isVerifying && uiState.retryAfterSeconds == 0L,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(text = stringResource(R.string.start_new_challenge))

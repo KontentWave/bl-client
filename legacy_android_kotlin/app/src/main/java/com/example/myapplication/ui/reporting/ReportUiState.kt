@@ -11,6 +11,7 @@ data class ReportUiState(
     val featureError: String? = null,
     val generalError: String? = null,
     val isRetryableError: Boolean = false,
+    val retryAfterSeconds: Long = 0,
     val lastSubmittedFeatureLabel: String? = null,
     val lastSubmittedLevel: String? = null,
     val lastUniqueReporterCount: Int? = null,

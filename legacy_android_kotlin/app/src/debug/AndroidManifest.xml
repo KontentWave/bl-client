@@ -4,8 +4,11 @@
 
     <application
         android:usesCleartextTraffic="true"
-        tools:targetApi="28" />
+        tools:targetApi="28">
+        <activity
+            android:name=".testing.RecoveryHarnessActivity"
+            android:exported="true" />
+    </application>
 
 </manifest>
-
 

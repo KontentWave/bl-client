@@ -11,12 +11,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.myapplication.ui.RetryCooldown
+import com.example.myapplication.session.SessionRecovery
 
 class BlacklistQueryViewModel(
     private val blacklistQueryRepository: BlacklistQueryRepository,
+    private val nowMillis: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(BlacklistQueryUiState())
     val uiState: StateFlow<BlacklistQueryUiState> = _uiState.asStateFlow()
+    private val cooldown = RetryCooldown(viewModelScope, nowMillis) { remaining ->
+        _uiState.update { it.copy(retryAfterSeconds = remaining) }
+    }
 
     fun onTargetHashChanged(value: String) {
         _uiState.update {
@@ -32,6 +38,7 @@ class BlacklistQueryViewModel(
     }
 
     fun submitQuery() {
+        if (uiState.value.isSubmitting || cooldown.remainingSeconds > 0) return
         val normalizedTargetHash = uiState.value.targetHash.trim().lowercase()
         if (!normalizedTargetHash.matches(TARGET_HASH_REGEX)) {
             _uiState.update {
@@ -43,6 +50,7 @@ class BlacklistQueryViewModel(
             return
         }
 
+        _uiState.update { it.copy(isSubmitting = true) }
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -68,6 +76,7 @@ class BlacklistQueryViewModel(
                 }
 
                 is BlacklistQueryResult.Failure -> {
+                    cooldown.extend(result.retryAfterSeconds)
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
@@ -82,20 +91,20 @@ class BlacklistQueryViewModel(
     }
 
     fun reset() {
-        _uiState.value = BlacklistQueryUiState()
+        if (uiState.value.isSubmitting) return
+        _uiState.value = BlacklistQueryUiState(retryAfterSeconds = cooldown.remainingSeconds)
     }
 
     companion object {
         private val TARGET_HASH_REGEX = Regex("^[0-9a-f]{64}$")
 
-        fun factory(): ViewModelProvider.Factory =
+        fun factory(sessionRecovery: SessionRecovery? = null): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    val repository = BlacklistQueryRepositoryProvider.create()
+                    val repository = BlacklistQueryRepositoryProvider.create(sessionRecovery = sessionRecovery)
                     return BlacklistQueryViewModel(repository) as T
                 }
             }
     }
 }
-

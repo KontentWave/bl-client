@@ -1,18 +1,20 @@
 package com.example.myapplication.data
 
 import com.example.myapplication.data.remote.ReportApi
-import com.example.myapplication.data.remote.model.ApiErrorEnvelope
 import com.example.myapplication.data.remote.model.StoreReportRequest
 import com.example.myapplication.security.SignedRequestFactory
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
 import retrofit2.HttpException
 import java.io.IOException
+import com.example.myapplication.session.SessionRecovery
+import com.example.myapplication.security.DeviceHardwareSecurityUnavailableException
 
 class ReportRepositoryImpl(
     private val reportApi: ReportApi,
     private val signedRequestFactory: SignedRequestFactory,
     private val gson: Gson,
+    private val sessionRecovery: SessionRecovery? = null,
 ) : ReportRepository {
     override suspend fun submitReport(
         clientPhoneNumber: String,
@@ -52,8 +54,15 @@ class ReportRepositoryImpl(
                     )
                 }
             } else {
-                parseFailure(response.errorBody()?.charStream()?.readText()).toReportFailure()
+                val failure = ApiFailure.parse(response)
+                if (response.code() == 403 && !failure.responseMalformed && failure.code == "device_not_bound") {
+                    sessionRecovery?.authorizationRejected(signedPayload.publicKey)
+                }
+                failure.toReportFailure()
             }
+        } catch (exception: DeviceHardwareSecurityUnavailableException) {
+            sessionRecovery?.refresh()
+            ReportSubmissionResult.Failure("request_preparation_failed", exception.message ?: "Device key unavailable.")
         } catch (_: IOException) {
             ReportSubmissionResult.Failure(
                 code = "network_unavailable",
@@ -75,42 +84,4 @@ class ReportRepositoryImpl(
         }
     }
 
-    private fun parseFailure(rawErrorBody: String?): ApiFailure {
-        if (rawErrorBody.isNullOrBlank()) {
-            return ApiFailure(
-                code = "unexpected_error",
-                message = "The request could not be completed.",
-            )
-        }
-
-        return runCatching {
-            gson.fromJson(rawErrorBody, ApiErrorEnvelope::class.java)
-        }.getOrNull()?.let { errorEnvelope ->
-            ApiFailure(
-                code = errorEnvelope.code,
-                message = errorEnvelope.message,
-                fieldErrors = errorEnvelope.errors,
-                retryable = errorEnvelope.meta.retryable == true,
-            )
-        } ?: ApiFailure(
-            code = "unexpected_error",
-            message = "The request could not be completed.",
-        )
-    }
-
-    private data class ApiFailure(
-        val code: String,
-        val message: String,
-        val fieldErrors: Map<String, List<String>> = emptyMap(),
-        val retryable: Boolean = false,
-    ) {
-        fun toReportFailure(): ReportSubmissionResult.Failure =
-            ReportSubmissionResult.Failure(
-                code = code,
-                message = message,
-                fieldErrors = fieldErrors,
-                retryable = retryable,
-            )
-    }
 }
-

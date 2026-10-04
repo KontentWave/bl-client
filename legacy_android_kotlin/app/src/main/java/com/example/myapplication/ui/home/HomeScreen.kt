@@ -47,6 +47,8 @@ fun HomeScreen(
     onRefreshShieldStatusClick: () -> Unit,
     onRestartOnboardingClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isSessionRestored: Boolean = false,
+    recoveryMessage: String? = null,
 ) {
     Scaffold(modifier = modifier.fillMaxSize()) { innerPadding ->
         Column(
@@ -58,7 +60,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = stringResource(R.string.home_title),
+                text = stringResource(if (isSessionRestored) R.string.home_recovered_workspace_title else R.string.home_title),
                 style = MaterialTheme.typography.headlineMedium,
             )
             Text(
@@ -83,17 +85,21 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        text = stringResource(R.string.home_verified_title),
+                        text = stringResource(if (isSessionRestored) R.string.home_recovered_title else R.string.home_verified_title),
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        text = stringResource(R.string.home_verified_body, maskedPhoneNumber),
+                        text = if (isSessionRestored) stringResource(R.string.home_recovered_body)
+                            else stringResource(R.string.home_verified_body, maskedPhoneNumber),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
                         text = stringResource(R.string.home_verified_at, verifiedAt),
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    if (recoveryMessage != null) {
+                        Text(text = recoveryMessage, color = MaterialTheme.colorScheme.error)
+                    }
                     TextButton(
                         onClick = onRestartOnboardingClick,
                         modifier = Modifier.testTag(HomeTestTags.RESTART_ONBOARDING_BUTTON),
@@ -443,4 +449,3 @@ private fun HomeScreenPreview() {
         )
     }
 }
-

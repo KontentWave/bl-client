@@ -21,15 +21,50 @@ import kotlinx.coroutines.launch
 import android.util.Base64
 import java.security.MessageDigest
 import java.security.Signature
+import java.time.Instant
+import com.example.myapplication.ui.RetryCooldown
+import com.example.myapplication.session.SessionRecovery
 
 class OnboardingViewModel(
     private val authRepository: AuthRepository,
     private val signedRequestFactory: SignedRequestFactory,
+    private val nowMillis: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val nowInstant: () -> Instant = { Instant.now() },
+    private val diagnosticsEnabled: Boolean = BuildConfig.DEBUG,
+    private val sessionRecovery: SessionRecovery? = null,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(OnboardingUiState())
+    private val _uiState = MutableStateFlow(OnboardingUiState(
+        verifiedAt = sessionRecovery?.state?.value?.metadata?.verifiedAt,
+        isSessionRestored = sessionRecovery?.state?.value?.restored == true,
+        generalError = sessionRecovery?.state?.value?.message,
+    ))
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
+    private val cooldown = RetryCooldown(viewModelScope, nowMillis) { remaining ->
+        _uiState.update { it.copy(retryAfterSeconds = remaining) }
+    }
+
+    init {
+        if (sessionRecovery != null) {
+            viewModelScope.launch {
+                sessionRecovery.state.collect { recovery ->
+                    _uiState.update {
+                        it.copy(
+                            verifiedAt = recovery.metadata?.verifiedAt,
+                            isSessionRestored = recovery.restored,
+                            generalError = recovery.message,
+                            maskedPhoneNumber = if (recovery.metadata == null) null else it.maskedPhoneNumber,
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     fun onAdUrlChanged(value: String) {
+        if (value.length > 2048) {
+            _uiState.update { it.copy(adUrlError = "Ad URL must not exceed 2048 characters.") }
+            return
+        }
         _uiState.update {
             it.copy(
                 adUrl = value,
@@ -54,14 +89,17 @@ class OnboardingViewModel(
     }
 
     fun submitAdUrl() {
+        if (uiState.value.isSubmitting || uiState.value.isVerifying || cooldown.remainingSeconds > 0) return
+        if (uiState.value.adUrlError == "Ad URL must not exceed 2048 characters.") return
         val currentAdUrl = uiState.value.adUrl.trim()
-        if (currentAdUrl.isBlank()) {
+        if (currentAdUrl.isBlank() || currentAdUrl.length > 2048) {
             _uiState.update {
                 it.copy(adUrlError = "Escort ad URL is required.")
             }
             return
         }
 
+        _uiState.update { it.copy(isSubmitting = true) }
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -71,9 +109,7 @@ class OnboardingViewModel(
                     otpError = null,
                     generalError = null,
                     isRetryableError = false,
-                    isChallengeLocked = false,
                     verifiedAt = null,
-                    otp = "",
                     debugSummary = null,
                 )
             }
@@ -99,19 +135,22 @@ class OnboardingViewModel(
                 }
 
                 is InitiateAuthResult.Failure -> {
+                    cooldown.extend(result.retryAfterSeconds)
                     val fieldError = result.fieldErrors["ad_url"]?.firstOrNull()
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
                             adUrlError = fieldError,
-                            otp = "",
                             otpError = null,
-                            generalError = if (fieldError == null) result.message else null,
+                            generalError = if (fieldError != null && it.hasInitiatedChallenge) fieldError
+                                else if (fieldError == null) result.message +
+                                if (result.code == "sms_dispatch_failed" || result.code == "response_parse_failed")
+                                    " SMS delivery may have occurred. Wait before a manual resend." else "" else null,
                             isRetryableError = result.retryable,
-                            isChallengeLocked = false,
-                            challengeId = null,
-                            maskedPhoneNumber = null,
-                            otpExpiresAt = null,
+                            // Rejections and unavailability do not supply a replacement challenge.
+                            challengeId = it.challengeId,
+                            maskedPhoneNumber = it.maskedPhoneNumber,
+                            otpExpiresAt = it.otpExpiresAt,
                             verifiedAt = null,
                             debugSummary = null,
                         )
@@ -123,6 +162,7 @@ class OnboardingViewModel(
 
     fun submitOtp() {
         val currentState = uiState.value
+        if (currentState.isSubmitting || currentState.isVerifying || cooldown.remainingSeconds > 0) return
         val challengeId = currentState.challengeId
         if (challengeId.isNullOrBlank()) {
             _uiState.update {
@@ -138,6 +178,13 @@ class OnboardingViewModel(
             return
         }
 
+        val expired = currentState.otpExpiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+            ?.let { nowInstant().isAfter(it) } == true
+        if (expired) {
+            _uiState.update { it.copy(isChallengeLocked = true, generalError = "This challenge has expired. Request a new SMS challenge.") }
+            return
+        }
+
         val currentOtp = currentState.otp.trim()
         if (currentOtp.length != 6) {
             _uiState.update {
@@ -146,6 +193,7 @@ class OnboardingViewModel(
             return
         }
 
+        _uiState.update { it.copy(isVerifying = true) }
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -192,26 +240,35 @@ class OnboardingViewModel(
                 )
             ) {
                 is VerifyAuthResult.Success -> {
+                    sessionRecovery?.recordVerified(signedPayload.publicKey, result.verifiedAt)
                     _uiState.update {
                         it.copy(
                             isVerifying = false,
+                            otp = "",
                             otpError = null,
-                            generalError = null,
+                            generalError = sessionRecovery?.state?.value?.message,
                             isRetryableError = false,
                             isChallengeLocked = false,
                             challengeId = result.challengeId,
                             maskedPhoneNumber = result.maskedPhoneNumber,
-                            verifiedAt = result.verifiedAt,
+                            verifiedAt = if (sessionRecovery == null) result.verifiedAt
+                                else sessionRecovery.state.value.metadata?.verifiedAt,
+                            isSessionRestored = false,
                             debugSummary = debugSummary,
                         )
                     }
                 }
 
                 is VerifyAuthResult.Failure -> {
+                    cooldown.extend(result.retryAfterSeconds)
                     val otpFieldError = result.fieldErrors["otp"]?.firstOrNull()
                     val signatureFieldError = result.fieldErrors["signature"]?.firstOrNull()
                     val challengeFieldError = result.fieldErrors["challenge_id"]?.firstOrNull()
-                    val terminalFailure = !result.retryable
+                    // Only documented terminal codes establish a closed challenge. An unreadable
+                    // response or generic throttle cannot establish consumption or exhaustion.
+                    val terminalFailure = !result.responseMalformed && result.code in setOf(
+                        "otp_invalid_or_expired", "signature_invalid", "challenge_not_found",
+                    )
                     _uiState.update {
                         it.copy(
                             isVerifying = false,
@@ -230,22 +287,14 @@ class OnboardingViewModel(
     }
 
     fun startNewChallenge() {
-        _uiState.update {
-            it.copy(
-                otp = "",
-                otpError = null,
-                generalError = null,
-                isRetryableError = false,
-                challengeId = null,
-                maskedPhoneNumber = null,
-                otpExpiresAt = null,
-                verifiedAt = null,
-                isChallengeLocked = false,
-                isSubmitting = false,
-                isVerifying = false,
-                debugSummary = null,
-            )
-        }
+        // Explicit resend: keep the old challenge until the server returns a new one.
+        submitAdUrl()
+    }
+
+    fun restartOnboarding() {
+        if (uiState.value.isSubmitting || uiState.value.isVerifying) return
+        sessionRecovery?.forgetLocalHint()
+        _uiState.value = OnboardingUiState(retryAfterSeconds = cooldown.remainingSeconds)
     }
 
     private fun createDebugSummary(
@@ -254,7 +303,7 @@ class OnboardingViewModel(
         publicKey: String,
         signature: String,
     ): String? {
-        if (!BuildConfig.DEBUG) {
+        if (!diagnosticsEnabled) {
             return null
         }
 
@@ -296,16 +345,15 @@ class OnboardingViewModel(
             .joinToString(separator = "") { eachByte -> "%02x".format(eachByte) }
 
     companion object {
-        fun factory(): ViewModelProvider.Factory =
+        fun factory(sessionRecovery: SessionRecovery? = null): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     val authApi = ApiClientFactory.createAuthApi(BuildConfig.API_BASE_URL)
                     val repository = AuthRepositoryImpl(authApi, ApiClientFactory.gson())
                     val signedRequestFactory = SecuritySignedRequestFactory()
-                    return OnboardingViewModel(repository, signedRequestFactory) as T
+                    return OnboardingViewModel(repository, signedRequestFactory, sessionRecovery = sessionRecovery) as T
                 }
             }
     }
 }
-

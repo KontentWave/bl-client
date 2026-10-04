@@ -9,10 +9,12 @@ data class OnboardingUiState(
     val otpError: String? = null,
     val generalError: String? = null,
     val isRetryableError: Boolean = false,
+    val retryAfterSeconds: Long = 0,
     val challengeId: String? = null,
     val maskedPhoneNumber: String? = null,
     val otpExpiresAt: String? = null,
     val verifiedAt: String? = null,
+    val isSessionRestored: Boolean = false,
     val isChallengeLocked: Boolean = false,
     val debugSummary: String? = null,
 ) {
@@ -22,4 +24,3 @@ data class OnboardingUiState(
     val isVerified: Boolean
         get() = !verifiedAt.isNullOrBlank()
 }
-

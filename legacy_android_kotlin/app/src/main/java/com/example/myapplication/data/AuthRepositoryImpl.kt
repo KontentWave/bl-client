@@ -3,10 +3,10 @@ package com.example.myapplication.data
 import android.util.Log
 import com.example.myapplication.BuildConfig
 import com.example.myapplication.data.remote.AuthApi
-import com.example.myapplication.data.remote.model.ApiErrorEnvelope
 import com.example.myapplication.data.remote.model.InitiateAuthRequest
 import com.example.myapplication.data.remote.model.VerifyAuthRequest
 import com.google.gson.Gson
+import com.google.gson.stream.MalformedJsonException
 import kotlinx.coroutines.CancellationException
 import retrofit2.HttpException
 import java.io.IOException
@@ -38,12 +38,18 @@ class AuthRepositoryImpl(
                     )
                 }
             } else {
-                parseFailure(response.errorBody()?.charStream()?.readText()).toInitiateFailure()
+                ApiFailure.parse(response).toInitiateFailure()
             }
+        } catch (_: MalformedJsonException) {
+            InitiateAuthResult.Failure(
+                code = "response_parse_failed",
+                message = "SMS delivery is unknown because the server response could not be processed. Retry manually later.",
+                responseMalformed = true,
+            )
         } catch (_: IOException) {
             InitiateAuthResult.Failure(
                 code = "network_unavailable",
-                message = "Unable to reach the server. Check the API base URL and your connection.",
+                message = "SMS delivery is unknown. Do not resend automatically; wait and retry manually if needed.",
                 retryable = true,
             )
         } catch (exception: HttpException) {
@@ -92,10 +98,14 @@ class AuthRepositoryImpl(
                     )
                 }
             } else {
-                val rawErrorBody = response.errorBody()?.charStream()?.readText()
-                logVerifyFailureDiagnostics(rawErrorBody)
-                parseFailure(rawErrorBody).toVerifyFailure()
+                ApiFailure.parse(response).toVerifyFailure()
             }
+        } catch (_: MalformedJsonException) {
+            VerifyAuthResult.Failure(
+                code = "response_parse_failed",
+                message = "The server response could not be processed.",
+                responseMalformed = true,
+            )
         } catch (_: IOException) {
             VerifyAuthResult.Failure(
                 code = "network_unavailable",
@@ -138,67 +148,6 @@ class AuthRepositoryImpl(
         }
     }
 
-    private fun logVerifyFailureDiagnostics(rawErrorBody: String?) {
-        if (!BuildConfig.DEBUG) {
-            return
-        }
-
-        runCatching {
-            Log.w(
-                LOG_TAG,
-                "verify_response_diag " +
-                    "debug=${BuildConfig.DEBUG} " +
-                    "error_body_sha256=${rawErrorBody.orEmpty().sha256()} " +
-                    "error_body=${rawErrorBody.orEmpty()}",
-            )
-        }
-    }
-
-    private fun parseFailure(rawErrorBody: String?): ApiFailure {
-        if (rawErrorBody.isNullOrBlank()) {
-            return ApiFailure(
-                code = "unexpected_error",
-                message = "The request could not be completed.",
-            )
-        }
-
-        return runCatching {
-            gson.fromJson(rawErrorBody, ApiErrorEnvelope::class.java)
-        }.getOrNull()?.let { errorEnvelope ->
-            ApiFailure(
-                code = errorEnvelope.code,
-                message = errorEnvelope.message,
-                fieldErrors = errorEnvelope.errors,
-                retryable = errorEnvelope.meta.retryable == true,
-            )
-        } ?: ApiFailure(
-            code = "unexpected_error",
-            message = "The request could not be completed.",
-        )
-    }
-
-    private data class ApiFailure(
-        val code: String,
-        val message: String,
-        val fieldErrors: Map<String, List<String>> = emptyMap(),
-        val retryable: Boolean = false,
-    ) {
-        fun toInitiateFailure(): InitiateAuthResult.Failure =
-            InitiateAuthResult.Failure(
-                code = code,
-                message = message,
-                fieldErrors = fieldErrors,
-                retryable = retryable,
-            )
-
-        fun toVerifyFailure(): VerifyAuthResult.Failure =
-            VerifyAuthResult.Failure(
-                code = code,
-                message = message,
-                fieldErrors = fieldErrors,
-                retryable = retryable,
-            )
-    }
 
     private fun String.sha256(): String =
         MessageDigest.getInstance("SHA-256")
