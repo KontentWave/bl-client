@@ -136,14 +136,39 @@ class RetryStateTest {
             }
         }
         val vm = ReportViewModel(fake) { scheduler.currentTime }.also { store.put("report", it) }
-        vm.onClientPhoneNumberChanged("synthetic"); vm.onFeatureSelected(ReportingFeature.NO_SHOW)
+        vm.onClientPhoneNumberChanged("0900 000 001"); vm.onFeatureSelected(ReportingFeature.NO_SHOW)
         vm.submitReport(); vm.submitReport(); scheduler.runCurrent()
         vm.reset()
         assertEquals(3L, vm.uiState.value.retryAfterSeconds)
-        vm.onClientPhoneNumberChanged("other"); vm.onFeatureSelected(ReportingFeature.NO_SHOW)
+        vm.onClientPhoneNumberChanged("+421900000002"); vm.onFeatureSelected(ReportingFeature.NO_SHOW)
         vm.submitReport(); scheduler.runCurrent(); assertEquals(1, calls)
         scheduler.advanceTimeBy(3000); scheduler.runCurrent(); assertEquals(1, calls)
         vm.submitReport(); scheduler.runCurrent(); assertEquals(2, calls)
+    }
+
+    @Test fun invalidReportInputDoesNotCallRepositoryOrReplayAfterCorrection() {
+        var calls = 0
+        val fake = object : ReportRepository {
+            override suspend fun submitReport(clientPhoneNumber: String, feature: ReportingFeature): ReportSubmissionResult {
+                calls++
+                assertEquals("+421900000001", clientPhoneNumber)
+                return ReportSubmissionResult.Failure("synthetic", "Synthetic response")
+            }
+        }
+        val vm = ReportViewModel(fake).also { store.put("report", it) }
+        vm.onFeatureSelected(ReportingFeature.NO_SHOW)
+        for (vector in com.example.myapplication.phone.PhoneNumberVectors.load().filter { it.normalized == null }) {
+            vm.onClientPhoneNumberChanged(vector.raw)
+            vm.submitReport(); scheduler.runCurrent()
+            assertNotNull(vm.uiState.value.clientPhoneNumberError)
+            assertFalse(vm.uiState.value.isSubmitting)
+        }
+        vm.onClientPhoneNumberChanged("0900 000 001")
+        scheduler.advanceTimeBy(60000); scheduler.runCurrent()
+        assertEquals(0, calls)
+        vm.submitReport(); vm.submitReport(); scheduler.runCurrent()
+        assertEquals(1, calls)
+        assertEquals("+421900000001", vm.uiState.value.clientPhoneNumber)
     }
 
     @Test fun queryResetAndInputChangesDoNotBypassCooldown() {

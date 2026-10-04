@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.myapplication.ui.RetryCooldown
 import com.example.myapplication.session.SessionRecovery
+import com.example.myapplication.phone.PhoneNumberNormalizer
 
 class ReportViewModel(
     private val reportRepository: ReportRepository,
@@ -61,19 +62,25 @@ class ReportViewModel(
     fun submitReport() {
         val currentState = uiState.value
         if (currentState.isSubmitting || cooldown.remainingSeconds > 0) return
-        val normalizedClientPhoneNumber = currentState.clientPhoneNumber.trim()
+        val normalizedClientPhoneNumber = PhoneNumberNormalizer.normalize(currentState.clientPhoneNumber)
         val selectedFeature = currentState.selectedFeature
 
         var hasValidationError = false
-        if (normalizedClientPhoneNumber.isBlank()) {
+        if (normalizedClientPhoneNumber == null) {
             hasValidationError = true
-            _uiState.update { it.copy(clientPhoneNumberError = "Client phone number is required.") }
+            _uiState.update {
+                it.copy(clientPhoneNumberError = if (currentState.clientPhoneNumber.isBlank()) {
+                    "Client phone number is required."
+                } else {
+                    PhoneNumberNormalizer.INVALID_INPUT_MESSAGE
+                })
+            }
         }
         if (selectedFeature == null) {
             hasValidationError = true
             _uiState.update { it.copy(featureError = "Select a report feature.") }
         }
-        if (hasValidationError || selectedFeature == null) {
+        if (hasValidationError || selectedFeature == null || normalizedClientPhoneNumber == null) {
             return
         }
 

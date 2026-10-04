@@ -14,6 +14,13 @@ class PublicKeyPemEncoderTest {
     """.trimIndent()
 
     @Test
+    fun normalize_matchesBackendLineTrimmingBlankLinesAndCrLfPolicy() {
+        val dirtyPem = "\r\n" + samplePem.lines().joinToString("\r\n \t\r\n") { " \t$it \t" } + "\r\n"
+        assertEquals(samplePem, PublicKeyPemEncoder.normalize(dirtyPem))
+        assertEquals(samplePem, PublicKeyPemEncoder.toPem(PublicKeyPemEncoder.fromPem(dirtyPem)))
+    }
+
+    @Test
     fun toPem_roundTripsKnownEcPublicKeyWithoutChangingContent() {
         val publicKey = PublicKeyPemEncoder.fromPem(samplePem)
 
@@ -35,4 +42,3 @@ class PublicKeyPemEncoderTest {
         assertFalse(encodedLines.drop(1).any { it.startsWith(" ") || it.startsWith("\t") })
     }
 }
-

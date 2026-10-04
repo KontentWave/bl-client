@@ -18,7 +18,11 @@ object PublicKeyPemEncoder {
         )
     }
 
-    fun normalize(pem: String): String = pem.replace("\r\n", "\n").trim()
+    fun normalize(pem: String): String = pem.replace("\r\n", "\n")
+        .split('\n')
+        .map { line -> line.trim { it in " \t\n\r\u0000\u000B" } }
+        .filter { it.isNotEmpty() }
+        .joinToString("\n")
 
     fun fromPem(pem: String): PublicKey {
         val normalizedPem = normalize(pem)
@@ -32,5 +36,3 @@ object PublicKeyPemEncoder {
         return KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encoded))
     }
 }
-
-

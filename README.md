@@ -1,6 +1,6 @@
 # Blacklist Client
 
-**Last documentation update:** 2026-10-04 21:24:44 CEST (UTC+02:00).
+**Last documentation update:** 2026-10-04 22:01:40 CEST (UTC+02:00) - final CB-02/CB-08 strict whitespace-boundary correction and repeated validation.
 
 Android client for a privacy-focused caller-warning and community reporting service backed by a Laravel API.
 
@@ -53,6 +53,35 @@ Set-Location legacy_android_kotlin
 ```
 
 `SessionNavigationTest` executes production navigation and Activity recreation with fakes; it is not an OS process-kill test. A separate offline emulator `am force-stop`/fresh-launch check of the debug harness was executed on 2026-10-04, confirming persistent synthetic metadata, local-recovery text and zero fake-command replay. This is actual OS process termination/relaunch with a fixed fake key, not Android Keystore, physical-device/reboot, hosted authorization or live-OTP evidence. Exact commands/results and remaining gates are in the client-owned [handoff](backend-docs/client-docs/CLIENT_TO_SERVER.md); the durable decision is [ADR-001](.github/docs/ADRs/001-key-bound-local-session-recovery.md).
+
+## Report and caller-number normalization
+
+Reporting and incoming-call lookup share a formatting-only subset of the inspected backend policy. Compact/spaced `+421900000001`, `00421 900-000-001`, Slovak trunk `0900 000 001`, and bare country prefix `421900000001` all become `+421900000001` before report signing/transmission or caller SHA-256 hashing. Explicit international `+`/`00` forms retain their supplied country prefix; this is not worldwide numbering-plan, carrier or SMS certification.
+
+ASCII digits, spaces and internal hyphens are supported. Bare local numbers such as `900000001`, letters, extensions, parentheses, dots, non-ASCII digits/separators, unavailable caller IDs and empty/incomplete supported prefixes are rejected locally. Reports display a field error without signing/sending; invalid caller input never queries. The client no longer guesses `+421` for bare nine-digit caller IDs.
+
+The canonical report contains exactly the normalized number sent on the wire. Field order, JSON/slash escaping, UTF-8 signing and Base64 DER ECDSA encoding remain unchanged. PEM cleanup matches backend CRLF conversion, per-line trimming and blank-line removal. Normalization does not replay a corrected input or introduce retries.
+
+The backend currently has no country/national-length validation and strips arbitrary non-digits. With explicit user approval, this slice preserves its prefix mappings but does not copy that broad stripping or invent a new country/length rule. A coordinated numbering-plan/format decision remains open; syntactic normalization is not proof a number exists. See [ADR-002](.github/docs/ADRs/002-shared-phone-normalization-before-signing.md).
+
+Focused local normalization/signing tests:
+
+```powershell
+Set-Location legacy_android_kotlin
+.\gradlew.bat :app:testDebugUnitTest --tests '*PhoneNumberNormalizerTest' --tests '*CallerNumberNormalizerTest' --tests '*ReportNormalizationSigningTest' --tests '*CanonicalPayloadFactoryTest' --tests '*PublicKeyPemEncoderTest' --tests '*IncomingCallProcessorTest'
+```
+
+Optional actual PHP verifier interoperability (Windows + existing WSL PHP/OpenSSL and a read-only backend checkout):
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:CB02_BACKEND_ROOT = '/home/marcel/projects/blacklist/backend-laravel'
+$env:CB02_INTEROP_SCRIPT = '/mnt/c/Users/Marcel-PC/AndroidStudioProjects/blacklist-client/legacy_android_kotlin/app/src/test/interop/verify-report.php'
+Set-Location legacy_android_kotlin
+.\gradlew.bat --no-daemon --console=plain :app:testDebugUnitTest --tests '*BackendReportInteropTest' --rerun
+```
+
+These two environment values are WSL filesystem paths passed to PHP, not PowerShell navigation paths. Set them for your explicitly selected local checkouts; `CB02_WSL_DISTRO` defaults to `Ubuntu-22.04`. Without both values, the optional JVM interoperability test is skipped rather than claimed as passing. Its client-owned PHP harness loads only the actual backend normalizer/signature service files: no Laravel boot, `.env`, database, cache, hosted request or SMS. Ephemeral private keys stay in JVM memory; only synthetic signed fixtures go through stdin. Successful PHP verification is stronger than Java self-verification, but does not establish HTTP authorization, database reporting, hardware-backed Android signing or hosted compatibility.
 
 ## Rate-limit compatibility
 

@@ -51,7 +51,7 @@ class BetaCompatibilityTest {
         1 -> (auth.verifyAuth("synthetic-challenge", "000000", key, signature) as VerifyAuthResult.Failure).let {
             ApiFailure(it.code, it.message, it.fieldErrors, it.retryable, it.retryAfterSeconds, it.responseMalformed)
         }
-        2 -> (reports.submitReport("synthetic-number", ReportingFeature.NO_SHOW) as ReportSubmissionResult.Failure).let {
+        2 -> (reports.submitReport("+421900000001", ReportingFeature.NO_SHOW) as ReportSubmissionResult.Failure).let {
             ApiFailure(it.code, it.message, it.fieldErrors, it.retryable, it.retryAfterSeconds, it.responseMalformed)
         }
         else -> (queries.checkTargetHash("a".repeat(64)) as BlacklistQueryResult.Failure).let {

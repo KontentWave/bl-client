@@ -9,6 +9,7 @@ import retrofit2.HttpException
 import java.io.IOException
 import com.example.myapplication.session.SessionRecovery
 import com.example.myapplication.security.DeviceHardwareSecurityUnavailableException
+import com.example.myapplication.phone.PhoneNumberNormalizer
 
 class ReportRepositoryImpl(
     private val reportApi: ReportApi,
@@ -20,7 +21,12 @@ class ReportRepositoryImpl(
         clientPhoneNumber: String,
         feature: ReportingFeature,
     ): ReportSubmissionResult {
-        val normalizedClientPhoneNumber = clientPhoneNumber.trim()
+        val normalizedClientPhoneNumber = PhoneNumberNormalizer.normalize(clientPhoneNumber)
+            ?: return ReportSubmissionResult.Failure(
+                code = "client_phone_number_invalid",
+                message = PhoneNumberNormalizer.INVALID_INPUT_MESSAGE,
+                fieldErrors = mapOf("client_phone_number" to listOf(PhoneNumberNormalizer.INVALID_INPUT_MESSAGE)),
+            )
 
         return try {
             val signedPayload = signedRequestFactory.createReportRequest(
