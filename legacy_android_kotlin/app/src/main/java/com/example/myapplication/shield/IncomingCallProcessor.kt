@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.myapplication.data.BlacklistQueryRepository
 import com.example.myapplication.data.BlacklistQueryRepositoryProvider
 import com.example.myapplication.data.BlacklistQueryResult
+import com.example.myapplication.session.SessionRecoveryProvider
 
 class IncomingCallProcessor(
     private val blacklistQueryRepository: BlacklistQueryRepository,
@@ -112,7 +113,7 @@ class IncomingCallProcessor(
 
     companion object {
         fun create(context: Context): IncomingCallProcessor = IncomingCallProcessor(
-            blacklistQueryRepository = BlacklistQueryRepositoryProvider.create(),
+            blacklistQueryRepository = BlacklistQueryRepositoryProvider.create(sessionRecovery = SessionRecoveryProvider.get(context)),
             callerNumberNormalizer = CallerNumberNormalizer(),
             callerNumberHasher = CallerNumberHasher(),
             shieldLiveStatusSink = ShieldLiveStatusStore(context),

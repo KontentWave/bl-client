@@ -15,12 +15,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.myapplication.ui.RetryCooldown
+import com.example.myapplication.session.SessionRecovery
 
 class ReportViewModel(
     private val reportRepository: ReportRepository,
+    private val nowMillis: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = _uiState.asStateFlow()
+    private val cooldown = RetryCooldown(viewModelScope, nowMillis) { remaining ->
+        _uiState.update { it.copy(retryAfterSeconds = remaining) }
+    }
 
     fun onClientPhoneNumberChanged(value: String) {
         _uiState.update {
@@ -54,6 +60,7 @@ class ReportViewModel(
 
     fun submitReport() {
         val currentState = uiState.value
+        if (currentState.isSubmitting || cooldown.remainingSeconds > 0) return
         val normalizedClientPhoneNumber = currentState.clientPhoneNumber.trim()
         val selectedFeature = currentState.selectedFeature
 
@@ -70,6 +77,7 @@ class ReportViewModel(
             return
         }
 
+        _uiState.update { it.copy(isSubmitting = true) }
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -102,6 +110,7 @@ class ReportViewModel(
                 }
 
                 is ReportSubmissionResult.Failure -> {
+                    cooldown.extend(result.retryAfterSeconds)
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
@@ -117,11 +126,12 @@ class ReportViewModel(
     }
 
     fun reset() {
-        _uiState.value = ReportUiState()
+        if (uiState.value.isSubmitting) return
+        _uiState.value = ReportUiState(retryAfterSeconds = cooldown.remainingSeconds)
     }
 
     companion object {
-        fun factory(): ViewModelProvider.Factory =
+        fun factory(sessionRecovery: SessionRecovery? = null): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -130,10 +140,10 @@ class ReportViewModel(
                         reportApi = reportApi,
                         signedRequestFactory = SecuritySignedRequestFactory(),
                         gson = ApiClientFactory.gson(),
+                        sessionRecovery = sessionRecovery,
                     )
                     return ReportViewModel(repository) as T
                 }
             }
     }
 }
-

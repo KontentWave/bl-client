@@ -26,10 +26,13 @@
     <string name="home_verified_title">Active device binding</string>
     <string name="home_verified_body">Signed requests from this device are currently bound to %1$s.</string>
     <string name="home_verified_at">Binding confirmed at: %1$s</string>
+    <string name="home_recovered_title">Device workspace recovered locally</string>
+    <string name="home_recovered_workspace_title">Recovered device workspace</string>
+    <string name="home_recovered_body">The saved verification record matches this device key. Current server authorization has not been checked. Requests run only when explicitly submitted or triggered by an incoming call; this record does not prove a successful Shield lookup.</string>
     <string name="home_restart_onboarding">Restart onboarding</string>
     <string name="home_shield_title">Phase 4 Call Shield readiness</string>
     <string name="home_shield_status_active_title">Shield active</string>
-    <string name="home_shield_status_active_body">All required permissions are available. Incoming-call monitoring and overlay warning setup are ready.</string>
+    <string name="home_shield_status_active_body">All required permissions are available. Incoming-call monitoring and overlay warning setup are ready. This is permission readiness only, not proof of current server authorization or a successful lookup.</string>
     <string name="home_shield_status_action_required_title">Shield needs attention</string>
     <string name="home_shield_status_action_required_body">Some Shield requirements are still missing: %1$s.</string>
     <string name="home_shield_status_blocked_title">Shield inactive</string>
@@ -107,7 +110,8 @@
     <string name="blacklist_query_results_hash">Target hash: %1$s</string>
     <string name="blacklist_query_matches_title">Level 2 features</string>
     <string name="blacklist_query_no_matches">No Level 2 features were returned for this target hash.</string>
-    <string name="retryable_error_hint">You can retry this step when the server becomes reachable again.</string>
+    <string name="retryable_error_hint">Retry manually when available. SMS delivery may be delayed; avoid repeated resend requests.</string>
+    <string name="retry_cooldown">Please wait %1$d seconds before trying again. Nothing will be sent automatically.</string>
     <string name="challenge_locked_hint">This verification attempt is closed. Start a new SMS challenge to continue.</string>
     <string name="slice_status">Phase 1 foundation is ready. The client now submits escort ad URLs and handles challenge initiation responses.</string>
     <string name="security_foundation_title">Security foundation</string>

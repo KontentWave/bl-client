@@ -6,6 +6,7 @@ data class BlacklistQueryUiState(
     val targetHashError: String? = null,
     val generalError: String? = null,
     val isRetryableError: Boolean = false,
+    val retryAfterSeconds: Long = 0,
     val lastQueriedHash: String? = null,
     val features: List<String> = emptyList(),
 ) {

@@ -18,25 +18,27 @@ class SecuritySignedRequestFactory(
     }
 
     override fun createReportRequest(clientPhoneNumber: String, feature: String): SignedRequestPayload {
-        val normalizedPublicKey = normalizedPublicKey()
+        val normalizedPublicKey = existingPublicKey()
         val canonicalPayload = CanonicalPayloadFactory.createReport(
             clientPhoneNumber = clientPhoneNumber,
             feature = feature,
             normalizedPublicKey = normalizedPublicKey,
         )
-        return securityManager.createSignedRequestPayload(canonicalPayload, normalizedPublicKey)
+        return securityManager.createExistingSignedRequestPayload(canonicalPayload, normalizedPublicKey)
     }
 
     override fun createBlacklistCheckRequest(targetHash: String): SignedRequestPayload {
-        val normalizedPublicKey = normalizedPublicKey()
+        val normalizedPublicKey = existingPublicKey()
         val canonicalPayload = CanonicalPayloadFactory.createBlacklistCheck(
             targetHash = targetHash,
             normalizedPublicKey = normalizedPublicKey,
         )
-        return securityManager.createSignedRequestPayload(canonicalPayload, normalizedPublicKey)
+        return securityManager.createExistingSignedRequestPayload(canonicalPayload, normalizedPublicKey)
     }
 
     private fun normalizedPublicKey(): String =
         PublicKeyPemEncoder.normalize(securityManager.getPublicKeyPem())
-}
 
+    private fun existingPublicKey(): String =
+        PublicKeyPemEncoder.normalize(PublicKeyPemEncoder.toPem(securityManager.requireExistingPublicKey()))
+}

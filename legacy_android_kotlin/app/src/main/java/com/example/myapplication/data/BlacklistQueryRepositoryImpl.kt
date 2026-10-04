@@ -1,18 +1,20 @@
 package com.example.myapplication.data
 
 import com.example.myapplication.data.remote.BlacklistApi
-import com.example.myapplication.data.remote.model.ApiErrorEnvelope
 import com.example.myapplication.data.remote.model.CheckBlacklistRequest
 import com.example.myapplication.security.SignedRequestFactory
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
 import retrofit2.HttpException
 import java.io.IOException
+import com.example.myapplication.session.SessionRecovery
+import com.example.myapplication.security.DeviceHardwareSecurityUnavailableException
 
 class BlacklistQueryRepositoryImpl(
     private val blacklistApi: BlacklistApi,
     private val signedRequestFactory: SignedRequestFactory,
     private val gson: Gson,
+    private val sessionRecovery: SessionRecovery? = null,
 ) : BlacklistQueryRepository {
     override suspend fun checkTargetHash(targetHash: String): BlacklistQueryResult {
         val normalizedTargetHash = targetHash.trim().lowercase()
@@ -40,8 +42,15 @@ class BlacklistQueryRepositoryImpl(
                     )
                 }
             } else {
-                parseFailure(response.errorBody()?.charStream()?.readText()).toQueryFailure()
+                val failure = ApiFailure.parse(response)
+                if (response.code() == 403 && !failure.responseMalformed && failure.code == "blacklist_query_unauthorized") {
+                    sessionRecovery?.authorizationRejected(signedPayload.publicKey)
+                }
+                failure.toQueryFailure()
             }
+        } catch (exception: DeviceHardwareSecurityUnavailableException) {
+            sessionRecovery?.refresh()
+            BlacklistQueryResult.Failure("request_preparation_failed", exception.message ?: "Device key unavailable.")
         } catch (_: IOException) {
             BlacklistQueryResult.Failure(
                 code = "network_unavailable",
@@ -63,42 +72,4 @@ class BlacklistQueryRepositoryImpl(
         }
     }
 
-    private fun parseFailure(rawErrorBody: String?): ApiFailure {
-        if (rawErrorBody.isNullOrBlank()) {
-            return ApiFailure(
-                code = "unexpected_error",
-                message = "The request could not be completed.",
-            )
-        }
-
-        return runCatching {
-            gson.fromJson(rawErrorBody, ApiErrorEnvelope::class.java)
-        }.getOrNull()?.let { errorEnvelope ->
-            ApiFailure(
-                code = errorEnvelope.code,
-                message = errorEnvelope.message,
-                fieldErrors = errorEnvelope.errors,
-                retryable = errorEnvelope.meta.retryable == true,
-            )
-        } ?: ApiFailure(
-            code = "unexpected_error",
-            message = "The request could not be completed.",
-        )
-    }
-
-    private data class ApiFailure(
-        val code: String,
-        val message: String,
-        val fieldErrors: Map<String, List<String>> = emptyMap(),
-        val retryable: Boolean = false,
-    ) {
-        fun toQueryFailure(): BlacklistQueryResult.Failure =
-            BlacklistQueryResult.Failure(
-                code = code,
-                message = message,
-                fieldErrors = fieldErrors,
-                retryable = retryable,
-            )
-    }
 }
-

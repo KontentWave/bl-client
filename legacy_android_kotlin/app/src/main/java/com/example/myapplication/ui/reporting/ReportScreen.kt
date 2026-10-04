@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.R
+import com.example.myapplication.ui.CooldownNotice
 import com.example.myapplication.data.ReportingFeature
 import com.example.myapplication.ui.theme.BlacklistClientTheme
 
@@ -127,9 +128,10 @@ fun ReportScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+            CooldownNotice(uiState.retryAfterSeconds)
             Button(
                 onClick = onSubmitClick,
-                enabled = !uiState.isSubmitting,
+                enabled = !uiState.isSubmitting && uiState.retryAfterSeconds == 0L,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(ReportTestTags.SUBMIT_BUTTON),

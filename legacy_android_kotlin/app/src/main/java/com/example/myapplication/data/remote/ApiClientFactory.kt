@@ -34,10 +34,20 @@ object ApiClientFactory {
         }
 
         val okHttpClient = OkHttpClient.Builder()
+            .retryOnConnectionFailure(false)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
             .addInterceptor(loggingInterceptor)
+            .addNetworkInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                // OkHttp can replay a 503 with Retry-After: 0 even when connection retries are off.
+                if (response.code == 503) {
+                    response.newBuilder().removeHeader("Retry-After").build()
+                } else response
+            }
             .build()
 
         return Retrofit.Builder()

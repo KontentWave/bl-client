@@ -15,6 +15,8 @@ sealed interface BlacklistQueryResult {
         val message: String,
         val fieldErrors: Map<String, List<String>> = emptyMap(),
         val retryable: Boolean = false,
+        val retryAfterSeconds: Long? = null,
+        val responseMalformed: Boolean = false,
     ) : BlacklistQueryResult
 }
 

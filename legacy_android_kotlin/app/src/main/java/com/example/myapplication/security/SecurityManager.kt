@@ -4,6 +4,10 @@ import android.util.Log
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
+import android.security.keystore.KeyPermanentlyInvalidatedException
+import com.example.myapplication.session.ExistingKey
+import java.io.IOException
+import java.security.GeneralSecurityException
 import com.example.myapplication.BuildConfig
 import java.security.InvalidAlgorithmParameterException
 import java.security.KeyFactory
@@ -64,7 +68,9 @@ class SecurityManager(
         }
 
         if (hasKeyPair()) {
-            deleteKeyPair()
+            throw DeviceHardwareSecurityUnavailableException(
+                "The existing device key is unavailable or unacceptable. It will not be replaced automatically.",
+            )
         }
 
         generateKeyPair()
@@ -78,6 +84,48 @@ class SecurityManager(
     }
 
     fun getPublicKeyPem(): String = PublicKeyPemEncoder.toPem(getPublicKey())
+
+    fun lookupExistingKey(): ExistingKey = try {
+        val store = keyStore()
+        if (!store.containsAlias(keyAlias)) {
+            ExistingKey.Missing
+        } else {
+            val publicKey = store.getCertificate(keyAlias)?.publicKey
+            val privateKey = store.getKey(keyAlias, null) as? PrivateKey
+            when {
+                publicKey !is ECPublicKey || privateKey == null -> ExistingKey.Invalid
+                requireHardwareBacked && !keySecurityInspector.inspect(privateKey).isHardwareBacked ->
+                    ExistingKey.Invalid
+                else -> {
+                    Signature.getInstance(SIGNATURE_ALGORITHM).initSign(privateKey)
+                    ExistingKey.Available(publicKey)
+                }
+            }
+        }
+    } catch (_: KeyPermanentlyInvalidatedException) {
+        ExistingKey.Invalid
+    } catch (_: GeneralSecurityException) {
+        ExistingKey.Unavailable
+    } catch (_: IOException) {
+        ExistingKey.Unavailable
+    } catch (_: ProviderException) {
+        ExistingKey.Unavailable
+    }
+
+    fun requireExistingPublicKey(): PublicKey = when (val key = lookupExistingKey()) {
+        is ExistingKey.Available -> key.publicKey
+        ExistingKey.Missing -> throw DeviceHardwareSecurityUnavailableException("The bound device key is missing. Verify explicitly.")
+        ExistingKey.Invalid -> throw DeviceHardwareSecurityUnavailableException("The existing device key is invalid. No key was replaced.")
+        ExistingKey.Unavailable -> throw DeviceHardwareSecurityUnavailableException("The device key is temporarily unavailable. Retry manually later.")
+    }
+
+    fun createExistingSignedRequestPayload(canonicalPayload: String, normalizedPublicKey: String): SignedRequestPayload {
+        val currentPem = PublicKeyPemEncoder.normalize(PublicKeyPemEncoder.toPem(requireExistingPublicKey()))
+        check(currentPem == normalizedPublicKey) { "The device key changed while preparing the request." }
+        return SignedRequestPayload(normalizedPublicKey, SignatureEncoder.toBase64(
+            signWithCurrentKey(canonicalPayload.toByteArray(Charsets.UTF_8)),
+        ))
+    }
 
     fun createSignedRequestPayload(
         canonicalPayload: String,
@@ -264,5 +312,4 @@ class SecurityManager(
             load(null)
         }
 }
-
 

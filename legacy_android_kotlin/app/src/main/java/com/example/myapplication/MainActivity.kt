@@ -35,16 +35,37 @@ import com.example.myapplication.ui.query.BlacklistQueryViewModel
 import com.example.myapplication.ui.reporting.ReportScreen
 import com.example.myapplication.ui.reporting.ReportViewModel
 import com.example.myapplication.ui.theme.BlacklistClientTheme
+import androidx.lifecycle.ViewModelProvider
+import com.example.myapplication.session.SessionRecoveryProvider
 
-class MainActivity : ComponentActivity() {
+data class MainActivityDependencies(
+    val onboardingFactory: ViewModelProvider.Factory,
+    val reportFactory: ViewModelProvider.Factory,
+    val queryFactory: ViewModelProvider.Factory,
+    val refreshRecovery: () -> Unit,
+)
+
+open class MainActivity : ComponentActivity() {
+    private val dependencies by lazy { createDependencies() }
+
+    protected open fun createDependencies(): MainActivityDependencies {
+        val recovery = SessionRecoveryProvider.get(applicationContext)
+        return MainActivityDependencies(
+            OnboardingViewModel.factory(recovery),
+            ReportViewModel.factory(recovery),
+            BlacklistQueryViewModel.factory(recovery),
+            recovery::refresh,
+        )
+    }
+
     private val onboardingViewModel by viewModels<OnboardingViewModel> {
-        OnboardingViewModel.factory()
+        dependencies.onboardingFactory
     }
     private val reportViewModel by viewModels<ReportViewModel> {
-        ReportViewModel.factory()
+        dependencies.reportFactory
     }
     private val blacklistQueryViewModel by viewModels<BlacklistQueryViewModel> {
-        BlacklistQueryViewModel.factory()
+        dependencies.queryFactory
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,6 +104,7 @@ class MainActivity : ComponentActivity() {
                 DisposableEffect(lifecycleOwner, context, uiState.isVerified) {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_RESUME) {
+                            dependencies.refreshRecovery()
                             shieldReadiness = shieldPermissionChecker.getReadiness(context)
                             shieldLiveStatus = shieldLiveStatusStore.read()
                         }
@@ -101,6 +123,8 @@ class MainActivity : ComponentActivity() {
                                 HomeScreen(
                                     maskedPhoneNumber = uiState.maskedPhoneNumber.orEmpty(),
                                     verifiedAt = uiState.verifiedAt.orEmpty(),
+                                    isSessionRestored = uiState.isSessionRestored,
+                                    recoveryMessage = uiState.generalError,
                                     shieldReadiness = shieldReadiness,
                                     shieldLiveStatus = shieldLiveStatus,
                                     onOpenReportingClick = {
@@ -133,7 +157,7 @@ class MainActivity : ComponentActivity() {
                                         verifiedDestination = VerifiedDestination.HOME
                                         reportViewModel.reset()
                                         blacklistQueryViewModel.reset()
-                                        onboardingViewModel.startNewChallenge()
+                                        onboardingViewModel.restartOnboarding()
                                     },
                                 )
                             }
@@ -182,4 +206,3 @@ class MainActivity : ComponentActivity() {
         QUERY,
     }
 }
-
