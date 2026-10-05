@@ -41,6 +41,7 @@ class IncomingCallCoordinator(
             ringing = false
             invalidateLookup()
             normalizedNumber = null
+            lastUnavailableInput = null
             unavailableRecorded = false
             publish(ShieldLiveStatus(stage = ShieldLiveStage.Idle), presenter.dismissWarning())
             return null
@@ -81,6 +82,7 @@ class IncomingCallCoordinator(
 
         invalidateLookup()
         normalizedNumber = number
+        lastUnavailableInput = null
         val token = generation
         val initialPresentation = presenter.dismissWarning()
         publish(
@@ -116,7 +118,12 @@ class IncomingCallCoordinator(
                 presenter.showWarning(number, currentResult.features, currentResult.targetHash)
             } else initialPresentation
             publish(currentResult, presentation)
-        }.also { lookupJob = it }
+        }.also { job ->
+            lookupJob = job
+            job.invokeOnCompletion {
+                if (lookupJob === job) lookupJob = null
+            }
+        }
     }
 
     private fun invalidateLookup() {

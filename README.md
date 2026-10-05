@@ -2,6 +2,8 @@
 
 **Last documentation update:** 2026-10-04 22:01:40 CEST (UTC+02:00) - final CB-02/CB-08 strict whitespace-boundary correction and repeated validation.
 **Updated:** 2026-10-05 11:30:31 CEST (UTC+02:00) - local CB-03/CB-04 call-lifecycle/deadline guidance; earlier evidence retains its original timestamp.
+**Updated:** 2026-10-05 13:19:46 CEST (UTC+02:00) - approved CB-05 caller-diagnostic retention, legacy cleanup and backup guidance.
+**Updated:** 2026-10-05 13:27:35 CEST (UTC+02:00) - final CB-05 local evidence and release-test limitation; earlier timestamps/results preserved.
 
 Android client for a privacy-focused caller-warning and community reporting service backed by a Laravel API.
 
@@ -42,7 +44,7 @@ Absent/invalid/mismatched metadata or missing/invalid/changed keys cannot restor
 
 Well-formed HTTP 403 `device_not_bound` (report) or `blacklist_query_unauthorized` (manual/Shield query) removes the matching hint and returns the open UI to onboarding, including when successful verification could not be persisted. The query code conflates signature and binding failures, so it is an authorization rejection, not proof of revocation. Network errors, 429, 503 and malformed errors retain valid hints. Storage failures are surfaced; they are not claimed as successful persistence/removal.
 
-The preference is excluded from legacy cloud backup and Android 12+ cloud backup/device transfer. A transferred preference still cannot restore access without the matching usable key. Existing caller-diagnostic retention/backup (CB-05) is separate and unchanged. Older installations with a bound key but no recovery record cannot be migrated by guessing server authorization; one explicit verification is needed to record the hint.
+The preference is excluded from legacy cloud backup and Android 12+ cloud backup/device transfer. A transferred preference still cannot restore access without the matching usable key. Caller diagnostics have their own no-persistence policy below; recovery metadata/key behavior is unchanged. Older installations with a bound key but no recovery record cannot be migrated by guessing server authorization; one explicit verification is needed to record the hint.
 
 `Restart onboarding` opens the URL form and removes only the local hint; it no longer resends a remembered URL immediately. It does not reset the key or server binding, and retained monotonic cooldowns remain enforced.
 
@@ -92,7 +94,7 @@ Android documents numbered and numberless companion PHONE_STATE broadcasts in un
 
 Caller lookup has a **5-second overall budget** from receipt of the usable numbered event, including preparation/signing and network work. Timeout is an explicit failed/not-checked outcome, not a successful no-match, and never automatically retries. Cancellation reaches signing preparation and Retrofit/OkHttp. Ordinary manual queries/reports keep their existing timeout policy. No call lookup is persisted or replayed after process recreation.
 
-This is an initial safety policy, not device latency certification. PHONE_STATE cannot reliably distinguish call waiting, overlapping multi-SIM calls, or same-number successors without an observed transition. Main-thread stalls, broadcast delivery delays and uninterruptible OEM operations remain timing assumptions. Caller diagnostic retention/backup (CB-05) is unchanged. See [ADR-003](.github/docs/ADRs/003-ringing-call-coordination-and-lookup-deadline.md).
+This is an initial safety policy, not device latency certification. PHONE_STATE cannot reliably distinguish call waiting, overlapping multi-SIM calls, or same-number successors without an observed transition. Main-thread stalls, broadcast delivery delays and uninterruptible OEM operations remain timing assumptions. See [ADR-003](.github/docs/ADRs/003-ringing-call-coordination-and-lookup-deadline.md).
 
 Focused synthetic/fake/local-network tests (no device, hosted API or real keys):
 
@@ -100,6 +102,25 @@ Focused synthetic/fake/local-network tests (no device, hosted API or real keys):
 Set-Location legacy_android_kotlin
 .\gradlew.bat --no-daemon --console=plain :app:testDebugUnitTest --tests '*IncomingCallCoordinatorTest' --tests '*IncomingCallProcessorTest' --tests '*CallerLookupDeadlineTest' --tests '*BlacklistQueryRepositoryTest' --tests '*SessionAuthorizationTest' --tests '*SessionRecoveryTest'
 ```
+
+## Caller-diagnostic privacy, cleanup and backup
+
+Debug and release persist **no caller status**: no raw/canonical numbers, hashes, matched labels, arbitrary messages, operational flags or timestamps. Caller details are transient lookup/active-warning data; observed OFFHOOK/IDLE cancels/invalidates lookup, clears coordinator identity and dismisses the warning. The active warning retains number/hash/matched labels; its guarded accessibility announcement retains matched labels. Home snapshots and caller-lookup logs contain none of these details.
+
+Independently created receiver/Activity stores share one redacted process-memory operational snapshot. Home uses fixed messages, distinguishing unavailable/failed/not checked from successful no-match, and retains its existing opening/resume/permission/manual-refresh hooks rather than subscribing to live calls. Its caption explicitly describes snapshot timing. Fresh processes start Idle/not checked and never restore/replay a caller lookup.
+
+First status-store initialization deletes only the app-owned legacy `shield_live_status` preferences through Android's `deleteSharedPreferences`, including XML/backup-file cleanup. A false result or security denial remains an explicit cleanup warning and retries on subsequent local status hooks; old values are never decoded even if removal fails. Recovery preferences, keys/bindings, challenges, cooldowns and unrelated data are untouched. This is upgrade behavior, not permission to clear an existing personal installation.
+
+Legacy cloud backup and Android 12+ cloud/device transfer explicitly exclude `shield_live_status.xml` and `shield_live_status.xml.bak`, including residual old diagnostics. Recovery exclusions remain intact. XML exclusions and JVM fakes are not an actual backup/transfer or Android durable-deletion drill; old uploaded backups, forensic erasure and external accessibility-service retention are not certified. See [ADR-004](.github/docs/ADRs/004-caller-diagnostic-retention-and-legacy-cleanup.md).
+
+Focused synthetic JVM privacy/lifecycle regressions:
+
+```powershell
+Set-Location legacy_android_kotlin
+.\gradlew.bat --no-daemon --console=plain :app:testDebugUnitTest --tests '*ShieldLiveStatusStoreTest' --tests '*CallerDiagnosticLoggingTest' --tests '*IncomingCallCoordinatorTest' --tests '*IncomingCallProcessorTest' --tests '*CallerLookupDeadlineTest' --tests '*SessionAuthorizationTest' --tests '*SessionRecoveryTest'
+```
+
+Final local CB-05 regression: **133 JVM tests / 20 suites**, zero failures/errors/skips, with actual PHP service interoperability enabled (eight report/eight query vectors). Debug application and instrumentation APKs built; debug lint **0 errors / 35 warnings**. Release Kotlin/resources compiled and release lint has **0 errors / 31 warnings**; compiled release XML retains diagnostic/recovery exclusions. The existing Gradle configuration exposes only debug JVM tests: the attempted `testReleaseUnitTest` task does not exist, so no release JVM execution is claimed. The new fake-backed Home fixture compiled but was not executed. No device was used, and no actual Android deletion/backup/transfer evidence was obtained. Exact commands and publication boundary are in the local client-owned handoff.
 
 ## Rate-limit compatibility
 
