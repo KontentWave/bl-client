@@ -112,7 +112,7 @@ fun OnboardingScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            if (uiState.generalError != null && uiState.isChallengeLocked) {
+            if (uiState.isChallengeLocked) {
                 Text(
                     text = challengeLockedHint,
                     modifier = Modifier.semantics {
@@ -185,9 +185,17 @@ fun OnboardingScreen(
                             text = stringResource(R.string.challenge_next_step_hint),
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        uiState.challengeRetryGuidance?.let { guidance ->
+                            Text(
+                                text = guidance,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                         OutlinedTextField(
                             value = uiState.otp,
                             onValueChange = onOtpChanged,
+                            enabled = !uiState.isVerifying && !uiState.isSubmitting && !uiState.isChallengeLocked,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag(OnboardingTestTags.OTP_INPUT)
@@ -200,6 +208,7 @@ fun OnboardingScreen(
                             supportingText = {
                                 Text(
                                     text = uiState.otpError ?: stringResource(R.string.otp_supporting_text),
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                                 )
                             },
                             singleLine = true,
@@ -228,7 +237,7 @@ fun OnboardingScreen(
                         TextButton(
                             onClick = onStartNewChallengeClick,
                             enabled = !uiState.isSubmitting && !uiState.isVerifying && uiState.retryAfterSeconds == 0L,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().testTag(OnboardingTestTags.NEW_CHALLENGE_BUTTON),
                         ) {
                             Text(text = stringResource(R.string.start_new_challenge))
                         }
@@ -348,6 +357,4 @@ private fun OnboardingScreenPreview() {
         )
     }
 }
-
-
 

@@ -4,6 +4,13 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsProperties
 import com.example.myapplication.ui.theme.BlacklistClientTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -13,6 +20,43 @@ import org.junit.Test
 class OnboardingScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test fun ambiguousOtpErrorOffersAccessibleCorrectionWithoutClaimingValidity() {
+        composeTestRule.setContent {
+            BlacklistClientTheme {
+                OnboardingScreen(
+                    OnboardingUiState(
+                        challengeId = "synthetic", maskedPhoneNumber = "masked",
+                        otpExpiresAt = "2030-01-01T00:15:00Z", otp = "000000",
+                        otpError = "Invalid or expired.",
+                        challengeRetryGuidance = "Server status is unknown. Correct the OTP and retry manually.",
+                    ), {}, {}, {}, {}, {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag(OnboardingTestTags.OTP_INPUT).assertIsEnabled()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.VERIFY_OTP_BUTTON).assertIsEnabled()
+        composeTestRule.onNodeWithText("Server status is unknown. Correct the OTP and retry manually.")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+        composeTestRule.onNodeWithText("Invalid or expired.", useUnmergedTree = true)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+    }
+
+    @Test fun terminalChallengeBlocksOtpButLeavesExplicitNewChallengeAvailable() {
+        composeTestRule.setContent {
+            BlacklistClientTheme {
+                OnboardingScreen(
+                    OnboardingUiState(
+                        challengeId = "synthetic", otp = "000000", isChallengeLocked = true,
+                    ), {}, {}, {}, {}, {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag(OnboardingTestTags.OTP_INPUT).assertIsNotEnabled()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.VERIFY_OTP_BUTTON).assertIsNotEnabled()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.NEW_CHALLENGE_BUTTON).assertIsEnabled()
+        composeTestRule.onNodeWithText("Verification is blocked for this challenge.", substring = true).assertExists()
+    }
 
     @Test
     fun initialState_showsOnlyAdUrlStep() {
@@ -87,5 +131,4 @@ class OnboardingScreenTest {
         assertTrue(composeTestRule.onAllNodesWithTag(OnboardingTestTags.AD_URL_INPUT).fetchSemanticsNodes().isEmpty())
     }
 }
-
 

@@ -8,9 +8,9 @@
     <string name="start_verification">Start SMS verification</string>
     <string name="start_verification_loading">Sending OTP challenge…</string>
     <string name="challenge_ready_title">SMS challenge created</string>
-    <string name="challenge_ready_body">Laravel sent an OTP to %1$s. OTP entry is the next UI step.</string>
+    <string name="challenge_ready_body">The server returned an SMS challenge for %1$s. Enter the code if you received it.</string>
     <string name="challenge_expires_at">OTP expires at: %1$s</string>
-    <string name="challenge_next_step_hint">The server-issued challenge is stored in memory and ready for the OTP verification slice.</string>
+    <string name="challenge_next_step_hint">This challenge is kept only in memory. Its recorded expiry is not confirmation that the server still accepts it. Verification and a new SMS require separate, explicit actions.</string>
     <string name="otp_label">OTP code</string>
     <string name="otp_placeholder">123456</string>
     <string name="otp_supporting_text">Enter the 6-digit OTP sent to the masked phone number above.</string>
@@ -114,7 +114,7 @@
     <string name="blacklist_query_no_matches">No Level 2 features were returned for this target hash.</string>
     <string name="retryable_error_hint">Retry manually when available. SMS delivery may be delayed; avoid repeated resend requests.</string>
     <string name="retry_cooldown">Please wait %1$d seconds before trying again. Nothing will be sent automatically.</string>
-    <string name="challenge_locked_hint">This verification attempt is closed. Start a new SMS challenge to continue.</string>
+    <string name="challenge_locked_hint">Verification is blocked for this challenge. Request a new challenge when allowed; signature or key failures may require support. No SMS is sent automatically.</string>
     <string name="slice_status">Phase 1 foundation is ready. The client now submits escort ad URLs and handles challenge initiation responses.</string>
     <string name="security_foundation_title">Security foundation</string>
     <string name="security_foundation_body">Hardware-backed Android Keystore generation for TEE/KeyMint-capable devices, PEM encoding, canonical payload creation, and signature helpers are now wired into the client foundation.</string>

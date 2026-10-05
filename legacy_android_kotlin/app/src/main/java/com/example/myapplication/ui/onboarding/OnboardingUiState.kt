@@ -16,6 +16,7 @@ data class OnboardingUiState(
     val verifiedAt: String? = null,
     val isSessionRestored: Boolean = false,
     val isChallengeLocked: Boolean = false,
+    val challengeRetryGuidance: String? = null,
     val debugSummary: String? = null,
 ) {
     val hasInitiatedChallenge: Boolean

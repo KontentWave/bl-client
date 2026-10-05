@@ -22,6 +22,7 @@ import android.util.Base64
 import java.security.MessageDigest
 import java.security.Signature
 import java.time.Instant
+import java.time.format.DateTimeParseException
 import com.example.myapplication.ui.RetryCooldown
 import com.example.myapplication.session.SessionRecovery
 
@@ -78,9 +79,10 @@ class OnboardingViewModel(
     }
 
     fun onOtpChanged(value: String) {
+        if (uiState.value.isSubmitting || uiState.value.isVerifying || uiState.value.isChallengeLocked) return
         _uiState.update {
             it.copy(
-                otp = value.filter(Char::isDigit).take(6),
+                otp = value.filter { it in '0'..'9' }.take(6),
                 otpError = null,
                 generalError = null,
                 isRetryableError = false,
@@ -128,6 +130,7 @@ class OnboardingViewModel(
                             generalError = null,
                             isRetryableError = false,
                             isChallengeLocked = false,
+                            challengeRetryGuidance = null,
                             verifiedAt = null,
                             debugSummary = null,
                         )
@@ -147,6 +150,9 @@ class OnboardingViewModel(
                                 if (result.code == "sms_dispatch_failed" || result.code == "response_parse_failed")
                                     " SMS delivery may have occurred. Wait before a manual resend." else "" else null,
                             isRetryableError = result.retryable,
+                            challengeRetryGuidance = if (it.hasInitiatedChallenge && !it.isChallengeLocked)
+                                "The retained challenge's server status is unknown. You can try its OTP manually before the recorded expiry, or request a new challenge when allowed."
+                                else it.challengeRetryGuidance,
                             // Rejections and unavailability do not supply a replacement challenge.
                             challengeId = it.challengeId,
                             maskedPhoneNumber = it.maskedPhoneNumber,
@@ -162,7 +168,7 @@ class OnboardingViewModel(
 
     fun submitOtp() {
         val currentState = uiState.value
-        if (currentState.isSubmitting || currentState.isVerifying || cooldown.remainingSeconds > 0) return
+        if (currentState.isSubmitting || currentState.isVerifying || currentState.isVerified || cooldown.remainingSeconds > 0) return
         val challengeId = currentState.challengeId
         if (challengeId.isNullOrBlank()) {
             _uiState.update {
@@ -173,15 +179,26 @@ class OnboardingViewModel(
 
         if (currentState.isChallengeLocked) {
             _uiState.update {
-                it.copy(generalError = "This verification attempt is closed. Start a new SMS challenge.")
+                it.copy(generalError = "Verification is blocked for this challenge. Request a new challenge when allowed; signature or key failures may require support.")
             }
             return
         }
 
-        val expired = currentState.otpExpiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
-            ?.let { nowInstant().isAfter(it) } == true
-        if (expired) {
-            _uiState.update { it.copy(isChallengeLocked = true, generalError = "This challenge has expired. Request a new SMS challenge.") }
+        val expiry = try {
+            currentState.otpExpiresAt?.let(Instant::parse)
+        } catch (_: DateTimeParseException) {
+            null
+        }
+        if (expiry == null || nowInstant().isAfter(expiry)) {
+            _uiState.update {
+                it.copy(
+                    isChallengeLocked = true,
+                    challengeRetryGuidance = null,
+                    generalError = if (expiry == null)
+                        "The challenge expiry is unavailable. Verification was not sent. Request a new challenge when allowed."
+                        else "The recorded challenge expiry has passed. Verification was not sent. Request a new challenge when allowed.",
+                )
+            }
             return
         }
 
@@ -215,6 +232,7 @@ class OnboardingViewModel(
                             ?: "Unable to prepare the device signature for verification.",
                         isRetryableError = false,
                         isChallengeLocked = true,
+                        challengeRetryGuidance = null,
                     )
                 }
                 return@launch
@@ -249,6 +267,7 @@ class OnboardingViewModel(
                             generalError = sessionRecovery?.state?.value?.message,
                             isRetryableError = false,
                             isChallengeLocked = false,
+                            challengeRetryGuidance = null,
                             challengeId = result.challengeId,
                             maskedPhoneNumber = result.maskedPhoneNumber,
                             verifiedAt = if (sessionRecovery == null) result.verifiedAt
@@ -264,10 +283,10 @@ class OnboardingViewModel(
                     val otpFieldError = result.fieldErrors["otp"]?.firstOrNull()
                     val signatureFieldError = result.fieldErrors["signature"]?.firstOrNull()
                     val challengeFieldError = result.fieldErrors["challenge_id"]?.firstOrNull()
-                    // Only documented terminal codes establish a closed challenge. An unreadable
-                    // response or generic throttle cannot establish consumption or exhaustion.
+                    // The combined OTP code cannot distinguish a typo from server-side expiry.
+                    // retryable:false rejects this request, not a corrected manual submission.
                     val terminalFailure = !result.responseMalformed && result.code in setOf(
-                        "otp_invalid_or_expired", "signature_invalid", "challenge_not_found",
+                        "signature_invalid", "challenge_not_found",
                     )
                     _uiState.update {
                         it.copy(
@@ -278,6 +297,10 @@ class OnboardingViewModel(
                                 ?: if (otpFieldError == null) result.message else null,
                             isRetryableError = result.retryable,
                             isChallengeLocked = terminalFailure,
+                            challengeRetryGuidance = if (terminalFailure) null
+                                else if (!result.responseMalformed && result.code == "otp_invalid_or_expired")
+                                    "The OTP may be incorrect or expired; the server has not confirmed which. Correct it and tap Verify OTP to try this challenge again before the recorded expiry. Each submission may count toward the server attempt limit."
+                                else "The challenge's server status is unknown. Retry verification manually before the recorded expiry when allowed. Each submission may count toward the server attempt limit; a new SMS requires a separate action.",
                             debugSummary = debugSummary,
                         )
                     }
