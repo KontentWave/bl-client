@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -14,8 +15,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
 import android.widget.TextView
 import com.example.myapplication.R
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
 
 class WindowManagerShieldWarningPresenter(
@@ -23,27 +22,28 @@ class WindowManagerShieldWarningPresenter(
 ) : ShieldWarningPresenter {
     private val appContext = context.applicationContext
 
-    override suspend fun showWarning(
+    override fun showWarning(
         normalizedNumber: String,
         features: List<String>,
         targetHash: String?,
-    ): ShieldOverlayPresentation = withContext(Dispatchers.Main) {
+    ): ShieldOverlayPresentation {
+        check(Looper.myLooper() == Looper.getMainLooper())
         if (!Settings.canDrawOverlays(appContext)) {
-            return@withContext ShieldOverlayPresentation(
+            return ShieldOverlayPresentation(
                 state = ShieldOverlayState.SkippedPermission,
                 message = appContext.getString(R.string.shield_overlay_missing_permission_message),
             )
         }
 
         val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-            ?: return@withContext ShieldOverlayPresentation(
+            ?: return ShieldOverlayPresentation(
                 state = ShieldOverlayState.Failed,
                 message = appContext.getString(R.string.shield_overlay_window_service_unavailable),
             )
 
-        runCatching {
-            dismissCurrentOverlay(windowManager)
-
+        val dismissal = dismissCurrentOverlay(windowManager)
+        if (dismissal.state == ShieldOverlayState.Failed) return dismissal
+        return try {
             val overlayView = LayoutInflater.from(appContext)
                 .inflate(R.layout.shield_warning_overlay, null)
 
@@ -74,37 +74,34 @@ class WindowManagerShieldWarningPresenter(
             currentOverlayView = WeakReference(overlayView)
             @Suppress("DEPRECATION")
             Handler(Looper.getMainLooper()).post {
-                overlayView.sendAccessibilityEvent(AccessibilityEvent.TYPE_ANNOUNCEMENT)
-                overlayView.announceForAccessibility(announcement)
+                if (currentOverlayView?.get() === overlayView && overlayView.isAttachedToWindow) {
+                    overlayView.sendAccessibilityEvent(AccessibilityEvent.TYPE_ANNOUNCEMENT)
+                    overlayView.announceForAccessibility(announcement)
+                }
             }
-        }.fold(
-            onSuccess = {
-                ShieldOverlayPresentation(
-                    state = ShieldOverlayState.Shown,
-                    message = appContext.getString(R.string.shield_overlay_shown_message),
-                )
-            },
-            onFailure = { throwable ->
-                ShieldOverlayPresentation(
-                    state = ShieldOverlayState.Failed,
-                    message = throwable.message ?: appContext.getString(R.string.shield_overlay_failed_message),
-                )
-            },
-        )
+            ShieldOverlayPresentation(
+                state = ShieldOverlayState.Shown,
+                message = appContext.getString(R.string.shield_overlay_shown_message),
+            )
+        } catch (_: WindowManager.BadTokenException) {
+            failedPresentation()
+        } catch (_: WindowManager.InvalidDisplayException) {
+            failedPresentation()
+        } catch (_: SecurityException) {
+            failedPresentation()
+        } catch (_: IllegalArgumentException) {
+            failedPresentation()
+        }
     }
 
-    override suspend fun dismissWarning(): ShieldOverlayPresentation = withContext(Dispatchers.Main) {
+    override fun dismissWarning(): ShieldOverlayPresentation {
+        check(Looper.myLooper() == Looper.getMainLooper())
         val windowManager = appContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-        val overlayView = currentOverlayView?.get()
-        if (windowManager == null || overlayView == null) {
-            return@withContext ShieldOverlayPresentation(state = ShieldOverlayState.None)
+        if (currentOverlayView?.get() == null) {
+            return ShieldOverlayPresentation(state = ShieldOverlayState.None)
         }
-
-        dismissCurrentOverlay(windowManager)
-        ShieldOverlayPresentation(
-            state = ShieldOverlayState.Dismissed,
-            message = appContext.getString(R.string.shield_overlay_dismissed_message),
-        )
+        if (windowManager == null) return failedPresentation()
+        return dismissCurrentOverlay(windowManager)
     }
 
     @Suppress("DEPRECATION")
@@ -125,18 +122,34 @@ class WindowManagerShieldWarningPresenter(
         y = 48
     }
 
-    private fun dismissCurrentOverlay(windowManager: WindowManager) {
-        currentOverlayView?.get()?.let { existingView ->
-            runCatching {
-                windowManager.removeView(existingView)
-            }
+    private fun dismissCurrentOverlay(windowManager: WindowManager): ShieldOverlayPresentation {
+        val existingView = currentOverlayView?.get()
+            ?: return ShieldOverlayPresentation(ShieldOverlayState.None)
+        try {
+            windowManager.removeView(existingView)
+        } catch (_: IllegalArgumentException) {
+            // Android may already have detached the view; do not claim a live warning.
+            Log.w(TAG, "Shield warning view was already detached.")
+        } catch (_: SecurityException) {
+            return failedPresentation()
         }
         currentOverlayView = null
+        return ShieldOverlayPresentation(
+            state = ShieldOverlayState.Dismissed,
+            message = appContext.getString(R.string.shield_overlay_dismissed_message),
+        )
+    }
+
+    private fun failedPresentation(): ShieldOverlayPresentation {
+        Log.w(TAG, "Shield warning window operation failed.")
+        return ShieldOverlayPresentation(
+            state = ShieldOverlayState.Failed,
+            message = appContext.getString(R.string.shield_overlay_failed_message),
+        )
     }
 
     private companion object {
+        const val TAG = "ShieldWarning"
         var currentOverlayView: WeakReference<View>? = null
     }
 }
-
-

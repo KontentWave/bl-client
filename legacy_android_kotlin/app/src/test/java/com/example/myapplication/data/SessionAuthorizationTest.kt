@@ -58,6 +58,16 @@ class SessionAuthorizationTest {
         assertEquals(1, server.requestCount)
     }
 
+    @Test fun incomingCallerAuthorizationRejectionClearsRecoveryWithoutReplay() = runBlocking {
+        server.enqueue(error("blacklist_query_unauthorized"))
+        val result = com.example.myapplication.shield.IncomingCallProcessor(queries())
+            .lookup("+421900000001")
+        assertEquals(com.example.myapplication.shield.ShieldLiveStage.QueryFailed, result.stage)
+        assertNull(recovery.state.value.metadata)
+        assertTrue(store.values.isEmpty())
+        assertEquals(1, server.requestCount)
+    }
+
     @Test fun temporaryServerFailureRetainsHintForBothOperations() = runBlocking {
         val saved = store.values
         server.enqueue(error("abuse_protection_unavailable", 503))

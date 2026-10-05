@@ -5,6 +5,10 @@ import com.example.myapplication.data.remote.model.CheckBlacklistRequest
 import com.example.myapplication.security.SignedRequestFactory
 import com.google.gson.Gson
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.runInterruptible
 import retrofit2.HttpException
 import java.io.IOException
 import com.example.myapplication.session.SessionRecovery
@@ -20,7 +24,10 @@ class BlacklistQueryRepositoryImpl(
         val normalizedTargetHash = targetHash.trim().lowercase()
 
         return try {
-            val signedPayload = signedRequestFactory.createBlacklistCheckRequest(normalizedTargetHash)
+            val signedPayload = runInterruptible(Dispatchers.IO) {
+                signedRequestFactory.createBlacklistCheckRequest(normalizedTargetHash)
+            }
+            currentCoroutineContext().ensureActive()
             val response = blacklistApi.checkBlacklist(
                 CheckBlacklistRequest(
                     targetHash = normalizedTargetHash,
@@ -28,6 +35,7 @@ class BlacklistQueryRepositoryImpl(
                     signature = signedPayload.signature,
                 ),
             )
+            currentCoroutineContext().ensureActive()
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body?.success == true) {
