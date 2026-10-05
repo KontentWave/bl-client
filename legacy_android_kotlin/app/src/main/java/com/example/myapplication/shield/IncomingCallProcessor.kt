@@ -1,124 +1,58 @@
 package com.example.myapplication.shield
 
-import android.content.Context
 import com.example.myapplication.data.BlacklistQueryRepository
-import com.example.myapplication.data.BlacklistQueryRepositoryProvider
 import com.example.myapplication.data.BlacklistQueryResult
-import com.example.myapplication.session.SessionRecoveryProvider
 import com.example.myapplication.phone.PhoneNumberNormalizer
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 class IncomingCallProcessor(
     private val blacklistQueryRepository: BlacklistQueryRepository,
-    private val callerNumberNormalizer: CallerNumberNormalizer,
-    private val callerNumberHasher: CallerNumberHasher,
-    private val shieldLiveStatusSink: ShieldLiveStatusSink,
-    private val shieldWarningPresenter: ShieldWarningPresenter,
+    private val callerNumberNormalizer: CallerNumberNormalizer = CallerNumberNormalizer(),
+    private val callerNumberHasher: CallerNumberHasher = CallerNumberHasher(),
 ) {
-    suspend fun processIncomingNumber(rawIncomingNumber: String?) {
-        val timestamp = System.currentTimeMillis()
-        val initialOverlayPresentation = shieldWarningPresenter.dismissWarning()
-        shieldLiveStatusSink.record(
-            ShieldLiveStatus(
-                stage = ShieldLiveStage.RingingDetected,
-                rawIncomingNumber = rawIncomingNumber?.trim().orEmpty().ifBlank { null },
-                overlayState = initialOverlayPresentation.state,
-                overlayMessage = initialOverlayPresentation.message,
-                updatedAtEpochMillis = timestamp,
+    // Preparation and repository work run in the coordinator's cancellable IO worker.
+    suspend fun lookup(rawIncomingNumber: String?): ShieldLiveStatus {
+        val normalizedNumber = rawIncomingNumber?.let(callerNumberNormalizer::normalize)
+            ?: return ShieldLiveStatus(
+                stage = if (rawIncomingNumber.isNullOrBlank()) {
+                    ShieldLiveStage.MissingIncomingNumber
+                } else {
+                    ShieldLiveStage.NormalizationFailed
+                },
+                rawIncomingNumber = rawIncomingNumber,
+                errorMessage = if (rawIncomingNumber.isNullOrBlank()) {
+                    MISSING_NUMBER_MESSAGE
+                } else {
+                    PhoneNumberNormalizer.INVALID_INPUT_MESSAGE
+                },
             )
-        )
-
-        val nonBlankRawNumber = rawIncomingNumber?.takeIf { it.isNotBlank() }
-        if (nonBlankRawNumber == null) {
-            shieldLiveStatusSink.record(
-                ShieldLiveStatus(
-                    stage = ShieldLiveStage.MissingIncomingNumber,
-                    errorMessage = "Android did not provide an incoming caller number for this ringing event.",
-                    overlayState = initialOverlayPresentation.state,
-                    overlayMessage = initialOverlayPresentation.message,
-                    updatedAtEpochMillis = timestamp,
-                )
-            )
-            return
-        }
-
-        val normalizedNumber = callerNumberNormalizer.normalize(nonBlankRawNumber)
-        if (normalizedNumber == null) {
-            shieldLiveStatusSink.record(
-                ShieldLiveStatus(
-                    stage = ShieldLiveStage.NormalizationFailed,
-                    rawIncomingNumber = nonBlankRawNumber,
-                    errorMessage = PhoneNumberNormalizer.INVALID_INPUT_MESSAGE,
-                    overlayState = initialOverlayPresentation.state,
-                    overlayMessage = initialOverlayPresentation.message,
-                    updatedAtEpochMillis = timestamp,
-                )
-            )
-            return
-        }
-
+        currentCoroutineContext().ensureActive()
         val targetHash = callerNumberHasher.sha256(normalizedNumber)
-        shieldLiveStatusSink.record(
-            ShieldLiveStatus(
-                stage = ShieldLiveStage.Querying,
-                rawIncomingNumber = nonBlankRawNumber,
+        currentCoroutineContext().ensureActive()
+        val result = blacklistQueryRepository.checkTargetHash(targetHash)
+        currentCoroutineContext().ensureActive()
+        return when (result) {
+            is BlacklistQueryResult.Success -> ShieldLiveStatus(
+                stage = if (result.features.isEmpty()) ShieldLiveStage.NoMatch else ShieldLiveStage.MatchFound,
+                rawIncomingNumber = rawIncomingNumber,
+                normalizedNumber = normalizedNumber,
+                targetHash = result.targetHash,
+                features = result.features,
+            )
+            is BlacklistQueryResult.Failure -> ShieldLiveStatus(
+                stage = ShieldLiveStage.QueryFailed,
+                rawIncomingNumber = rawIncomingNumber,
                 normalizedNumber = normalizedNumber,
                 targetHash = targetHash,
-                overlayState = initialOverlayPresentation.state,
-                overlayMessage = initialOverlayPresentation.message,
-                updatedAtEpochMillis = timestamp,
+                errorMessage = result.message,
+                retryable = result.retryable,
             )
-        )
-
-        when (val result = blacklistQueryRepository.checkTargetHash(targetHash)) {
-            is BlacklistQueryResult.Success -> {
-                val overlayPresentation = if (result.features.isEmpty()) {
-                    initialOverlayPresentation
-                } else {
-                    shieldWarningPresenter.showWarning(
-                        normalizedNumber = normalizedNumber,
-                        features = result.features,
-                        targetHash = result.targetHash,
-                    )
-                }
-                shieldLiveStatusSink.record(
-                    ShieldLiveStatus(
-                        stage = if (result.features.isEmpty()) ShieldLiveStage.NoMatch else ShieldLiveStage.MatchFound,
-                        rawIncomingNumber = nonBlankRawNumber,
-                        normalizedNumber = normalizedNumber,
-                        targetHash = result.targetHash,
-                        features = result.features,
-                        overlayState = overlayPresentation.state,
-                        overlayMessage = overlayPresentation.message,
-                        updatedAtEpochMillis = System.currentTimeMillis(),
-                    )
-                )
-            }
-
-            is BlacklistQueryResult.Failure -> {
-                shieldLiveStatusSink.record(
-                    ShieldLiveStatus(
-                        stage = ShieldLiveStage.QueryFailed,
-                        rawIncomingNumber = nonBlankRawNumber,
-                        normalizedNumber = normalizedNumber,
-                        targetHash = targetHash,
-                        errorMessage = result.message,
-                        retryable = result.retryable,
-                        overlayState = initialOverlayPresentation.state,
-                        overlayMessage = initialOverlayPresentation.message,
-                        updatedAtEpochMillis = System.currentTimeMillis(),
-                    )
-                )
-            }
         }
     }
 
     companion object {
-        fun create(context: Context): IncomingCallProcessor = IncomingCallProcessor(
-            blacklistQueryRepository = BlacklistQueryRepositoryProvider.create(sessionRecovery = SessionRecoveryProvider.get(context)),
-            callerNumberNormalizer = CallerNumberNormalizer(),
-            callerNumberHasher = CallerNumberHasher(),
-            shieldLiveStatusSink = ShieldLiveStatusStore(context),
-            shieldWarningPresenter = WindowManagerShieldWarningPresenter(context),
-        )
+        const val MISSING_NUMBER_MESSAGE =
+            "Android has not supplied a caller number; this call is not checked. A numbered companion broadcast may still arrive."
     }
 }

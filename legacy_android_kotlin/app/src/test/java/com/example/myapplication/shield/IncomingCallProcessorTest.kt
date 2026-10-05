@@ -2,6 +2,8 @@ package com.example.myapplication.shield
 
 import com.example.myapplication.data.BlacklistQueryRepository
 import com.example.myapplication.data.BlacklistQueryResult
+import com.example.myapplication.phone.PhoneNumberVectors
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -9,151 +11,71 @@ import org.junit.Test
 
 class IncomingCallProcessorTest {
     @Test
-    fun supportedFormatsQueryExactlyTheGoldenHashOncePerExplicitCallEvent() = runBlocking {
+    fun supportedFormatsQueryExactlyTheGoldenHash() = runBlocking {
         val queried = mutableListOf<String>()
-        val repository = object : BlacklistQueryRepository {
-            override suspend fun checkTargetHash(targetHash: String): BlacklistQueryResult {
-                queried += targetHash
-                return BlacklistQueryResult.Success(targetHash, emptyList())
-            }
+        val processor = processor {
+            queried += it
+            BlacklistQueryResult.Success(it, emptyList())
         }
-        val sink = RecordingShieldLiveStatusSink()
-        val processor = IncomingCallProcessor(
-            repository, CallerNumberNormalizer(), CallerNumberHasher(), sink, RecordingShieldWarningPresenter(),
-        )
-        for (vector in com.example.myapplication.phone.PhoneNumberVectors.load().filter { it.normalized != null }) {
+        for (vector in PhoneNumberVectors.load().filter { it.normalized != null }) {
             val count = queried.size
-            processor.processIncomingNumber(vector.raw)
+            val status = processor.lookup(vector.raw)
             assertEquals(count + 1, queried.size)
             assertEquals(vector.hash, queried.last())
-            assertEquals(vector.normalized, sink.last().normalizedNumber)
-            assertEquals(ShieldLiveStage.NoMatch, sink.last().stage)
+            assertEquals(vector.normalized, status.normalizedNumber)
+            assertEquals(ShieldLiveStage.NoMatch, status.stage)
         }
     }
 
     @Test
     fun unsupportedAndUnavailableNumbersNeverQuery() = runBlocking {
-        val repository = object : BlacklistQueryRepository {
-            override suspend fun checkTargetHash(targetHash: String): BlacklistQueryResult =
-                error("Unsupported input must not query")
-        }
-        val sink = RecordingShieldLiveStatusSink()
-        val processor = IncomingCallProcessor(
-            repository, CallerNumberNormalizer(), CallerNumberHasher(), sink, RecordingShieldWarningPresenter(),
-        )
-        processor.processIncomingNumber(null)
-        assertEquals(ShieldLiveStage.MissingIncomingNumber, sink.last().stage)
-        for (vector in com.example.myapplication.phone.PhoneNumberVectors.load().filter { it.normalized == null }) {
-            processor.processIncomingNumber(vector.raw)
+        val processor = processor { error("Unsupported input must not query") }
+        assertEquals(ShieldLiveStage.MissingIncomingNumber, processor.lookup(null).stage)
+        for (vector in PhoneNumberVectors.load().filter { it.normalized == null }) {
             assertEquals(
                 if (vector.raw.isBlank()) ShieldLiveStage.MissingIncomingNumber else ShieldLiveStage.NormalizationFailed,
-                sink.last().stage,
+                processor.lookup(vector.raw).stage,
             )
         }
     }
 
     @Test
-    fun processIncomingNumber_recordsMissingNumberWhenAndroidDoesNotProvideCallerId() = runBlocking {
-        val sink = RecordingShieldLiveStatusSink()
-        val processor = IncomingCallProcessor(
-            blacklistQueryRepository = FakeBlacklistQueryRepository(BlacklistQueryResult.Success("unused", emptyList())),
-            callerNumberNormalizer = CallerNumberNormalizer(),
-            callerNumberHasher = CallerNumberHasher(),
-            shieldLiveStatusSink = sink,
-            shieldWarningPresenter = RecordingShieldWarningPresenter(
-                dismissPresentation = ShieldOverlayPresentation(ShieldOverlayState.None),
-            ),
-        )
-
-        processor.processIncomingNumber(null)
-
-        assertEquals(ShieldLiveStage.MissingIncomingNumber, sink.last().stage)
-        assertTrue(sink.last().errorMessage.orEmpty().contains("did not provide"))
+    fun unavailableDoesNotClaimHiddenCallerId() = runBlocking {
+        val status = processor { error("Must not query") }.lookup(null)
+        assertTrue(status.errorMessage.orEmpty().contains("companion"))
+        assertTrue(status.errorMessage.orEmpty().contains("not checked"))
     }
 
     @Test
-    fun processIncomingNumber_recordsNoMatchForSuccessfulEmptyResult() = runBlocking {
-        val sink = RecordingShieldLiveStatusSink()
-        val processor = IncomingCallProcessor(
-            blacklistQueryRepository = FakeBlacklistQueryRepository(
-                BlacklistQueryResult.Success(
-                    targetHash = "target-hash",
-                    features = emptyList(),
-                )
-            ),
-            callerNumberNormalizer = CallerNumberNormalizer(),
-            callerNumberHasher = CallerNumberHasher(),
-            shieldLiveStatusSink = sink,
-            shieldWarningPresenter = RecordingShieldWarningPresenter(
-                dismissPresentation = ShieldOverlayPresentation(
-                    state = ShieldOverlayState.Dismissed,
-                    message = "Any previous overlay warning was dismissed.",
-                ),
-            ),
-        )
-
-        processor.processIncomingNumber("0903 223 183")
-
-        assertEquals(ShieldLiveStage.NoMatch, sink.last().stage)
-        assertEquals("+421903223183", sink.last().normalizedNumber)
-        assertEquals("target-hash", sink.last().targetHash)
-        assertEquals(ShieldOverlayState.Dismissed, sink.last().overlayState)
+    fun matchReturnsFeaturesWithoutPresentingAnOverlay() = runBlocking {
+        val status = processor { BlacklistQueryResult.Success(it, listOf("Aggressive")) }
+            .lookup("+421900000001")
+        assertEquals(ShieldLiveStage.MatchFound, status.stage)
+        assertEquals(listOf("Aggressive"), status.features)
+        assertEquals(ShieldOverlayState.None, status.overlayState)
     }
 
     @Test
-    fun processIncomingNumber_recordsMatchFoundWhenFeaturesAreReturned() = runBlocking {
-        val sink = RecordingShieldLiveStatusSink()
-        val processor = IncomingCallProcessor(
-            blacklistQueryRepository = FakeBlacklistQueryRepository(
-                BlacklistQueryResult.Success(
-                    targetHash = "target-hash",
-                    features = listOf("Aggressive", "No-Show"),
-                )
-            ),
-            callerNumberNormalizer = CallerNumberNormalizer(),
-            callerNumberHasher = CallerNumberHasher(),
-            shieldLiveStatusSink = sink,
-            shieldWarningPresenter = RecordingShieldWarningPresenter(
-                showPresentation = ShieldOverlayPresentation(
-                    state = ShieldOverlayState.Shown,
-                    message = "Overlay warning shown.",
-                ),
-            ),
-        )
-
-        processor.processIncomingNumber("+421903223183")
-
-        assertEquals(ShieldLiveStage.MatchFound, sink.last().stage)
-        assertEquals(listOf("Aggressive", "No-Show"), sink.last().features)
-        assertEquals(ShieldOverlayState.Shown, sink.last().overlayState)
+    fun failureIsNotNoMatchAndDoesNotRetry() = runBlocking {
+        var queries = 0
+        val status = processor {
+            queries++
+            BlacklistQueryResult.Failure("network_unavailable", "Not checked", retryable = true)
+        }.lookup("+421900000001")
+        assertEquals(1, queries)
+        assertEquals(ShieldLiveStage.QueryFailed, status.stage)
+        assertEquals("Not checked", status.errorMessage)
     }
 
-    private class FakeBlacklistQueryRepository(
-        private val result: BlacklistQueryResult,
-    ) : BlacklistQueryRepository {
-        override suspend fun checkTargetHash(targetHash: String): BlacklistQueryResult = result
+    @Test(expected = CancellationException::class)
+    fun cancellationPropagates() = runBlocking {
+        processor { throw CancellationException("Cancelled") }.lookup("+421900000001")
+        Unit
     }
 
-    private class RecordingShieldLiveStatusSink : ShieldLiveStatusSink {
-        private val statuses = mutableListOf<ShieldLiveStatus>()
-
-        override fun record(status: ShieldLiveStatus) {
-            statuses += status
-        }
-
-        fun last(): ShieldLiveStatus = statuses.last()
-    }
-
-    private class RecordingShieldWarningPresenter(
-        private val showPresentation: ShieldOverlayPresentation = ShieldOverlayPresentation(ShieldOverlayState.None),
-        private val dismissPresentation: ShieldOverlayPresentation = ShieldOverlayPresentation(ShieldOverlayState.None),
-    ) : ShieldWarningPresenter {
-        override suspend fun showWarning(
-            normalizedNumber: String,
-            features: List<String>,
-            targetHash: String?,
-        ): ShieldOverlayPresentation = showPresentation
-
-        override suspend fun dismissWarning(): ShieldOverlayPresentation = dismissPresentation
-    }
+    private fun processor(check: suspend (String) -> BlacklistQueryResult) = IncomingCallProcessor(
+        object : BlacklistQueryRepository {
+            override suspend fun checkTargetHash(targetHash: String) = check(targetHash)
+        },
+    )
 }

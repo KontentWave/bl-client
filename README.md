@@ -1,6 +1,7 @@
 # Blacklist Client
 
 **Last documentation update:** 2026-10-04 22:01:40 CEST (UTC+02:00) - final CB-02/CB-08 strict whitespace-boundary correction and repeated validation.
+**Updated:** 2026-10-05 11:30:31 CEST (UTC+02:00) - local CB-03/CB-04 call-lifecycle/deadline guidance; earlier evidence retains its original timestamp.
 
 Android client for a privacy-focused caller-warning and community reporting service backed by a Laravel API.
 
@@ -82,6 +83,23 @@ Set-Location legacy_android_kotlin
 ```
 
 These two environment values are WSL filesystem paths passed to PHP, not PowerShell navigation paths. Set them for your explicitly selected local checkouts; `CB02_WSL_DISTRO` defaults to `Ubuntu-22.04`. Without both values, the optional JVM interoperability test is skipped rather than claimed as passing. Its client-owned PHP harness loads only the actual backend normalizer/signature service files: no Laravel boot, `.env`, database, cache, hosted request or SMS. Ephemeral private keys stay in JVM memory; only synthetic signed fixtures go through stdin. Successful PHP verification is stronger than Java self-verification, but does not establish HTTP authorization, database reporting, hardware-backed Android signing or hosted compatibility.
+
+## Incoming-call lifecycle and lookup deadline
+
+The native receiver shares one process-owned call coordinator across receiver instances. Warnings are **ringing-only**: OFFHOOK (answer) and IDLE (reject/end) cancel lookup and dismiss the warning. Repeated ringing events and equivalent number formats do not query again. A different valid number replaces the current lookup; cancelled/old results cannot overwrite its warning or status.
+
+Android documents numbered and numberless companion PHONE_STATE broadcasts in unspecified order when both caller permissions are held. A blank companion never erases an available number/warning. Numberless-only calls are **not checked**, without claiming hidden caller ID; a later numbered companion can still initiate lookup. Invalid input never queries.
+
+Caller lookup has a **5-second overall budget** from receipt of the usable numbered event, including preparation/signing and network work. Timeout is an explicit failed/not-checked outcome, not a successful no-match, and never automatically retries. Cancellation reaches signing preparation and Retrofit/OkHttp. Ordinary manual queries/reports keep their existing timeout policy. No call lookup is persisted or replayed after process recreation.
+
+This is an initial safety policy, not device latency certification. PHONE_STATE cannot reliably distinguish call waiting, overlapping multi-SIM calls, or same-number successors without an observed transition. Main-thread stalls, broadcast delivery delays and uninterruptible OEM operations remain timing assumptions. Caller diagnostic retention/backup (CB-05) is unchanged. See [ADR-003](.github/docs/ADRs/003-ringing-call-coordination-and-lookup-deadline.md).
+
+Focused synthetic/fake/local-network tests (no device, hosted API or real keys):
+
+```powershell
+Set-Location legacy_android_kotlin
+.\gradlew.bat --no-daemon --console=plain :app:testDebugUnitTest --tests '*IncomingCallCoordinatorTest' --tests '*IncomingCallProcessorTest' --tests '*CallerLookupDeadlineTest' --tests '*BlacklistQueryRepositoryTest' --tests '*SessionAuthorizationTest' --tests '*SessionRecoveryTest'
+```
 
 ## Rate-limit compatibility
 
