@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
     <exclude domain="sharedpref" path="device_binding_recovery.xml"/>
+    <exclude domain="sharedpref" path="shield_live_status.xml"/>
+    <exclude domain="sharedpref" path="shield_live_status.xml.bak"/>
 </full-backup-content>

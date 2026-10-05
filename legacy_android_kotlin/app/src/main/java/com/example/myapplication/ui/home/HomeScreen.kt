@@ -203,6 +203,17 @@ private fun ShieldLiveStatusCard(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.testTag(HomeTestTags.SHIELD_LIVE_STATUS_BODY),
             )
+            Text(
+                text = stringResource(R.string.home_shield_live_retention),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (shieldLiveStatus.legacyCleanupFailed) {
+                Text(
+                    text = stringResource(R.string.home_shield_legacy_cleanup_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
         }
     }
 }
@@ -327,63 +338,21 @@ private fun stageTitleRes(stage: ShieldLiveStage): Int = when (stage) {
 }
 
 @Composable
-private fun formatShieldLiveStatusBody(shieldLiveStatus: ShieldLiveStatus): String = when (shieldLiveStatus.stage) {
-    ShieldLiveStage.Idle -> stringResource(R.string.home_shield_live_stage_idle_body)
-    ShieldLiveStage.RingingDetected -> appendOverlayOutcome(
-        base = stringResource(
-        R.string.home_shield_live_stage_ringing_body,
-        shieldLiveStatus.rawIncomingNumber ?: stringResource(R.string.home_shield_live_unknown_value),
-        ),
-        shieldLiveStatus = shieldLiveStatus,
-    )
-    ShieldLiveStage.MissingIncomingNumber -> appendOverlayOutcome(
-        base = stringResource(
-        R.string.home_shield_live_stage_missing_number_body,
-        shieldLiveStatus.errorMessage ?: stringResource(R.string.home_shield_live_unknown_value),
-        ),
-        shieldLiveStatus = shieldLiveStatus,
-    )
-    ShieldLiveStage.NormalizationFailed -> appendOverlayOutcome(
-        base = stringResource(
-        R.string.home_shield_live_stage_normalization_failed_body,
-        shieldLiveStatus.rawIncomingNumber ?: stringResource(R.string.home_shield_live_unknown_value),
-        shieldLiveStatus.errorMessage ?: stringResource(R.string.home_shield_live_unknown_value),
-        ),
-        shieldLiveStatus = shieldLiveStatus,
-    )
-    ShieldLiveStage.Querying -> appendOverlayOutcome(
-        base = stringResource(
-        R.string.home_shield_live_stage_querying_body,
-        shieldLiveStatus.normalizedNumber ?: stringResource(R.string.home_shield_live_unknown_value),
-        shieldLiveStatus.targetHash ?: stringResource(R.string.home_shield_live_unknown_value),
-        ),
-        shieldLiveStatus = shieldLiveStatus,
-    )
-    ShieldLiveStage.NoMatch -> appendOverlayOutcome(
-        base = stringResource(
-        R.string.home_shield_live_stage_no_match_body,
-        shieldLiveStatus.normalizedNumber ?: stringResource(R.string.home_shield_live_unknown_value),
-        shieldLiveStatus.targetHash ?: stringResource(R.string.home_shield_live_unknown_value),
-        ),
-        shieldLiveStatus = shieldLiveStatus,
-    )
-    ShieldLiveStage.MatchFound -> appendOverlayOutcome(
-        base = stringResource(
-        R.string.home_shield_live_stage_match_found_body,
-        shieldLiveStatus.normalizedNumber ?: stringResource(R.string.home_shield_live_unknown_value),
-        shieldLiveStatus.features.joinToString().ifBlank { stringResource(R.string.home_shield_live_unknown_value) },
-        ),
-        shieldLiveStatus = shieldLiveStatus,
-    )
-    ShieldLiveStage.QueryFailed -> appendOverlayOutcome(
-        base = stringResource(
-        R.string.home_shield_live_stage_query_failed_body,
-        shieldLiveStatus.targetHash ?: stringResource(R.string.home_shield_live_unknown_value),
-        shieldLiveStatus.errorMessage ?: stringResource(R.string.home_shield_live_unknown_value),
-        ),
-        shieldLiveStatus = shieldLiveStatus,
-    )
-}
+private fun formatShieldLiveStatusBody(shieldLiveStatus: ShieldLiveStatus): String = appendOverlayOutcome(
+    base = stringResource(
+        when (shieldLiveStatus.stage) {
+            ShieldLiveStage.Idle -> R.string.home_shield_live_stage_idle_body
+            ShieldLiveStage.RingingDetected -> R.string.home_shield_live_stage_ringing_body
+            ShieldLiveStage.MissingIncomingNumber -> R.string.home_shield_live_stage_missing_number_body
+            ShieldLiveStage.NormalizationFailed -> R.string.home_shield_live_stage_normalization_failed_body
+            ShieldLiveStage.Querying -> R.string.home_shield_live_stage_querying_body
+            ShieldLiveStage.NoMatch -> R.string.home_shield_live_stage_no_match_body
+            ShieldLiveStage.MatchFound -> R.string.home_shield_live_stage_match_found_body
+            ShieldLiveStage.QueryFailed -> R.string.home_shield_live_stage_query_failed_body
+        },
+    ),
+    shieldLiveStatus = shieldLiveStatus,
+)
 
 @Composable
 private fun appendOverlayOutcome(
@@ -401,22 +370,10 @@ private fun appendOverlayOutcome(
 @Composable
 private fun formatOverlayOutcome(shieldLiveStatus: ShieldLiveStatus): String? = when (shieldLiveStatus.overlayState) {
     ShieldOverlayState.None -> null
-    ShieldOverlayState.Shown -> stringResource(
-        R.string.home_shield_overlay_state_shown,
-        shieldLiveStatus.overlayMessage ?: stringResource(R.string.home_shield_live_unknown_value),
-    )
-    ShieldOverlayState.Dismissed -> stringResource(
-        R.string.home_shield_overlay_state_dismissed,
-        shieldLiveStatus.overlayMessage ?: stringResource(R.string.home_shield_live_unknown_value),
-    )
-    ShieldOverlayState.SkippedPermission -> stringResource(
-        R.string.home_shield_overlay_state_skipped_permission,
-        shieldLiveStatus.overlayMessage ?: stringResource(R.string.home_shield_live_unknown_value),
-    )
-    ShieldOverlayState.Failed -> stringResource(
-        R.string.home_shield_overlay_state_failed,
-        shieldLiveStatus.overlayMessage ?: stringResource(R.string.home_shield_live_unknown_value),
-    )
+    ShieldOverlayState.Shown -> stringResource(R.string.home_shield_overlay_state_shown)
+    ShieldOverlayState.Dismissed -> stringResource(R.string.home_shield_overlay_state_dismissed)
+    ShieldOverlayState.SkippedPermission -> stringResource(R.string.home_shield_overlay_state_skipped_permission)
+    ShieldOverlayState.Failed -> stringResource(R.string.home_shield_overlay_state_failed)
 }
 
 @Preview(showBackground = true)

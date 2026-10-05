@@ -1,7 +1,7 @@
 package com.example.myapplication.shield
 
 import android.content.Context
-import androidx.core.content.edit
+import android.util.Log
 
 data class ShieldLiveStatus(
     val stage: ShieldLiveStage = ShieldLiveStage.Idle,
@@ -14,6 +14,7 @@ data class ShieldLiveStatus(
     val overlayState: ShieldOverlayState = ShieldOverlayState.None,
     val overlayMessage: String? = null,
     val updatedAtEpochMillis: Long? = null,
+    val legacyCleanupFailed: Boolean = false,
 )
 
 enum class ShieldLiveStage {
@@ -44,62 +45,41 @@ fun interface ShieldLiveStatusSink {
     fun record(status: ShieldLiveStatus)
 }
 
-class ShieldLiveStatusStore(context: Context) : ShieldLiveStatusSink {
-    private val sharedPreferences = context.applicationContext.getSharedPreferences(
-        PREFERENCES_NAME,
-        Context.MODE_PRIVATE,
+class ShieldLiveStatusStore internal constructor(
+    private val memory: ShieldLiveStatusMemory,
+) : ShieldLiveStatusSink {
+    constructor(context: Context) : this(
+        processOwner.get {
+            val appContext = context.applicationContext
+            ShieldLiveStatusMemory(
+                legacyDiagnostics = LegacyShieldDiagnosticsDeletion(appContext::deleteSharedPreferences),
+                onCleanupFailure = {
+                    Log.w("ShieldStatus", "Legacy caller diagnostic cleanup was not durably confirmed.")
+                },
+            )
+        },
     )
 
-    fun read(): ShieldLiveStatus = ShieldLiveStatus(
-        stage = sharedPreferences.getString(KEY_STAGE, null)
-            ?.let { stored -> ShieldLiveStage.entries.firstOrNull { it.name == stored } }
-            ?: ShieldLiveStage.Idle,
-        rawIncomingNumber = sharedPreferences.getString(KEY_RAW_INCOMING_NUMBER, null),
-        normalizedNumber = sharedPreferences.getString(KEY_NORMALIZED_NUMBER, null),
-        targetHash = sharedPreferences.getString(KEY_TARGET_HASH, null),
-        features = sharedPreferences.getString(KEY_FEATURES, null)
-            ?.takeIf { it.isNotBlank() }
-            ?.split(FEATURE_SEPARATOR)
-            ?: emptyList(),
-        errorMessage = sharedPreferences.getString(KEY_ERROR_MESSAGE, null),
-        retryable = sharedPreferences.getBoolean(KEY_RETRYABLE, false),
-        overlayState = sharedPreferences.getString(KEY_OVERLAY_STATE, null)
-            ?.let { stored -> ShieldOverlayState.entries.firstOrNull { it.name == stored } }
-            ?: ShieldOverlayState.None,
-        overlayMessage = sharedPreferences.getString(KEY_OVERLAY_MESSAGE, null),
-        updatedAtEpochMillis = sharedPreferences.takeIf { it.contains(KEY_UPDATED_AT) }
-            ?.getLong(KEY_UPDATED_AT, 0L)
-            ?.takeIf { it > 0L },
-    )
-
-    override fun record(status: ShieldLiveStatus) {
-        sharedPreferences.edit {
-            putString(KEY_STAGE, status.stage.name)
-            putString(KEY_RAW_INCOMING_NUMBER, status.rawIncomingNumber)
-            putString(KEY_NORMALIZED_NUMBER, status.normalizedNumber)
-            putString(KEY_TARGET_HASH, status.targetHash)
-            putString(KEY_FEATURES, status.features.joinToString(FEATURE_SEPARATOR))
-            putString(KEY_ERROR_MESSAGE, status.errorMessage)
-            putBoolean(KEY_RETRYABLE, status.retryable)
-            putString(KEY_OVERLAY_STATE, status.overlayState.name)
-            putString(KEY_OVERLAY_MESSAGE, status.overlayMessage)
-            putLong(KEY_UPDATED_AT, status.updatedAtEpochMillis ?: 0L)
-        }
+    init {
+        memory.initialize()
     }
 
-    companion object {
-        private const val PREFERENCES_NAME = "shield_live_status"
-        private const val FEATURE_SEPARATOR = "||"
-        private const val KEY_STAGE = "stage"
-        private const val KEY_RAW_INCOMING_NUMBER = "raw_incoming_number"
-        private const val KEY_NORMALIZED_NUMBER = "normalized_number"
-        private const val KEY_TARGET_HASH = "target_hash"
-        private const val KEY_FEATURES = "features"
-        private const val KEY_ERROR_MESSAGE = "error_message"
-        private const val KEY_RETRYABLE = "retryable"
-        private const val KEY_OVERLAY_STATE = "overlay_state"
-        private const val KEY_OVERLAY_MESSAGE = "overlay_message"
-        private const val KEY_UPDATED_AT = "updated_at"
+    fun read(): ShieldLiveStatus = memory.read()
+
+    override fun record(status: ShieldLiveStatus) = memory.record(status)
+
+    private companion object {
+        val processOwner = ShieldLiveStatusOwner()
     }
 }
 
+internal class LegacyShieldDiagnosticsDeletion(
+    private val deletePreferences: (String) -> Boolean,
+) : LegacyShieldDiagnostics {
+    override fun clear(): Boolean = try {
+        // API 24+ deletes the dedicated XML and its .bak, including cached preferences.
+        deletePreferences("shield_live_status")
+    } catch (_: SecurityException) {
+        false
+    }
+}

@@ -25,14 +25,10 @@ object ApiClientFactory {
     }
 
     fun createBlacklistApi(baseUrl: String): BlacklistApi {
-        return createRetrofit(baseUrl).create(BlacklistApi::class.java)
+        return createRetrofit(baseUrl, logHttp = false).create(BlacklistApi::class.java)
     }
 
-    private fun createRetrofit(baseUrl: String): Retrofit {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        }
-
+    private fun createRetrofit(baseUrl: String, logHttp: Boolean = true): Retrofit {
         val okHttpClient = OkHttpClient.Builder()
             .retryOnConnectionFailure(false)
             .followRedirects(false)
@@ -40,7 +36,14 @@ object ApiClientFactory {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
-            .addInterceptor(loggingInterceptor)
+            .apply {
+                // Even BASIC logs can copy arbitrary response reasons/transport exceptions.
+                if (logHttp) {
+                    addInterceptor(HttpLoggingInterceptor().apply {
+                        level = HttpLoggingInterceptor.Level.BASIC
+                    })
+                }
+            }
             .addNetworkInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 // OkHttp can replay a 503 with Retry-After: 0 even when connection retries are off.
@@ -59,4 +62,3 @@ object ApiClientFactory {
 
     fun gson(): Gson = gson
 }
-
