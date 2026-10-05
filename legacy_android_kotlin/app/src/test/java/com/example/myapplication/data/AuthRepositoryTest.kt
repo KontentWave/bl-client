@@ -186,7 +186,7 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun verifyAuth_returnsHardStopFailureForExpiredOtp() = runBlocking {
+    fun verifyAuth_preservesCombinedOtpErrorAndNonRetryableRequestMetadata() = runBlocking {
         server.enqueue(
             MockResponse()
                 .setResponseCode(422)
@@ -221,4 +221,3 @@ class AuthRepositoryTest {
         assertFalse(failure.retryable)
     }
 }
-

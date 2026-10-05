@@ -4,6 +4,7 @@
 **Updated:** 2026-10-05 11:30:31 CEST (UTC+02:00) - local CB-03/CB-04 call-lifecycle/deadline guidance; earlier evidence retains its original timestamp.
 **Updated:** 2026-10-05 13:19:46 CEST (UTC+02:00) - approved CB-05 caller-diagnostic retention, legacy cleanup and backup guidance.
 **Updated:** 2026-10-05 13:27:35 CEST (UTC+02:00) - final CB-05 local evidence and release-test limitation; earlier timestamps/results preserved.
+**Updated:** 2026-10-05 14:06:15 CEST (UTC+02:00) - CB-09 explicit OTP correction, truthful retained-challenge guidance and local validation.
 
 Android client for a privacy-focused caller-warning and community reporting service backed by a Laravel API.
 
@@ -138,6 +139,16 @@ Set-Location legacy_android_kotlin
 `CooldownScreenTest` contains isolated Compose UI fixtures; `CooldownLifecycleTest` exercises a fake-backed countdown through navigation away/back and actual blank-Activity recreation. Its content is explicitly reattached after recreation; it does not test the production navigation shell. Building a test APK does not establish that UI tests have executed.
 
 Fresh-ViewModel JVM regressions model process-state loss, not an OS process kill. OTPs, pending challenges and cooldowns remain memory-only; no command is replayed. Production restoration now uses the minimal key-bound hint described above. Actual Android Keystore/physical-device restart and reboot behavior, live backend/device onboarding and release readiness remain separate approval-gated checks; do not reset a bound key to work around them.
+
+## OTP correction without another SMS
+
+An `otp_invalid_or_expired` response no longer automatically closes the local challenge. The contract combines wrong-code and expiry outcomes: the UI says the OTP **may be incorrect or expired**, not that the challenge is still valid. You can edit the code and explicitly tap **Verify OTP** against the same challenge, masked recipient and recorded expiry. Each submission may consume a server attempt; neither remaining attempts nor authoritative exhaustion can be inferred from generic `rate_limited`.
+
+Verification checks the recorded expiry at each explicit submission and sends nothing after it has passed. Missing/unreadable expiry blocks submission with an explicit error, without claiming server consumption. A well-formed `challenge_not_found` or `signature_invalid` still blocks verification; signature/key failures may require support and are not proof the server deleted the challenge. Temporary/network/unknown/malformed failures retain the challenge with server-status-unknown guidance. OTP edits clear the field error, not that uncertainty guidance or the cooldown.
+
+**Start a new challenge** is a separate explicit SMS action, subject to the same retained cooldown and in-flight guards. A failed resend retains local state but cannot guarantee server validity: the backend can replace a challenge before an ambiguous SMS failure. OTP input is disabled during initiation/verification and after a local block; duplicate commands cannot submit again in flight. No edits, countdown expiry, navigation, recreation or restoration initiate or verify automatically. Nothing new is persisted, and successful verification retains the existing key-bound recovery/authorization policy.
+
+See [ADR-005](.github/docs/ADRs/005-explicit-otp-correction-with-ambiguous-errors.md). Local CB-09 evidence: **69 targeted JVM tests / five suites**, then a fresh **147 JVM tests / 21 suites**, zero failures/errors/skips, including actual eight-report/eight-query PHP service interoperability. Debug app/test APKs and release Kotlin/resources compiled; debug/release lint remain **0 errors / 35 warnings** and **0 errors / 31 warnings**. The new fake-backed OTP correction/accessibility/lifecycle fixtures compiled but were **not executed on a device**. No hosted verification or live SMS was performed; this is not overall closed-beta readiness.
 
 ## Repository boundaries
 

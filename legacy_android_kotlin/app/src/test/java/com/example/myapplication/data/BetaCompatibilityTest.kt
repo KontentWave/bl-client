@@ -190,6 +190,41 @@ class BetaCompatibilityTest {
         assertTrue(encoded.length <= 4096)
     }
 
+    @Test fun correctedOtpIsOneExplicitWireRequestAgainstSameChallengeWithoutInitiation() = runBlocking {
+        enqueue(status = 422, code = "otp_invalid_or_expired", errors = """{"otp":["Invalid or expired."]}""", meta = """{"retryable":false}""", header = null)
+        val rejected = auth.verifyAuth("synthetic-challenge", "000000", key, signature) as VerifyAuthResult.Failure
+        assertEquals("otp_invalid_or_expired", rejected.code)
+        assertFalse(rejected.retryable)
+        assertFalse(rejected.responseMalformed)
+        assertEquals(listOf("Invalid or expired."), rejected.fieldErrors["otp"])
+        assertEquals(1, server.requestCount)
+        server.enqueue(MockResponse().setBody(
+            """{"success":true,"code":"auth.verified","data":{"challenge_id":"synthetic-challenge","masked_phone_number":"masked","verified_at":"2030-01-01T00:00:00Z"},"meta":{}}""",
+        ))
+        assertTrue(auth.verifyAuth("synthetic-challenge", "123456", key, signature) is VerifyAuthResult.Success)
+        for (otp in listOf("000000", "123456")) {
+            val request = server.takeRequest()
+            assertEquals("/api/auth/verify", request.path)
+            val body = com.google.gson.JsonParser.parseString(request.body.readUtf8()).asJsonObject
+            assertEquals("synthetic-challenge", body["challenge_id"].asString)
+            assertEquals(otp, body["otp"].asString)
+            assertEquals(key, body["public_key"].asString)
+            assertEquals(signature, body["signature"].asString)
+        }
+        assertEquals(2, server.requestCount)
+        assertNull(server.takeRequest(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+    }
+
+    @Test fun malformedTerminalEnvelopeDoesNotEstablishChallengeClosure() = runBlocking {
+        for (code in listOf("signature_invalid", "challenge_not_found", "otp_invalid_or_expired")) {
+            enqueue(status = 422, code = code, errors = """{"otp":[42]}""", meta = """{"retryable":false}""", header = null)
+            val result = call(1)
+            assertTrue(result.responseMalformed)
+            assertEquals("response_parse_failed", result.code)
+        }
+        assertEquals(3, server.requestCount)
+    }
+
     @Test fun supportedCanonicalUrlsAreSentUnchanged() = runBlocking {
         for (host in listOf("amaterky.sk", "www.amaterky.sk", "eurogirlsescort.com", "www.eurogirlsescort.com")) {
             enqueue(status = 422, code = "invalid_ad_url")

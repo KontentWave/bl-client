@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.onboarding
 
 object OnboardingTestTags {
+    const val NEW_CHALLENGE_BUTTON = "onboarding_new_challenge_button"
     const val AD_URL_INPUT = "ad_url_input"
     const val START_VERIFICATION_BUTTON = "start_verification_button"
     const val ERROR_REGION = "error_region"
@@ -9,4 +10,3 @@ object OnboardingTestTags {
     const val VERIFY_OTP_BUTTON = "verify_otp_button"
     const val VERIFIED_CARD = "verified_card"
 }
-
