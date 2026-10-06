@@ -2,12 +2,13 @@ package com.example.myapplication.ui.home
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import com.example.myapplication.shield.ShieldReadinessEvaluator
 import com.example.myapplication.shield.ShieldLiveStage
 import com.example.myapplication.shield.ShieldLiveStatus
@@ -49,14 +50,18 @@ class HomeScreenTest {
                 )
             }
         }
-        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_LIVE_STATUS_BODY).assertTextContains("not checked")
+        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_LIVE_STATUS_BODY).assertTextEquals(
+            "Caller lookup failed or exceeded its deadline. This call was not checked. No automatic retry.",
+        )
         composeTestRule.onNodeWithText("Legacy caller diagnostic removal", substring = true).assertExists()
         for (sensitive in listOf("+421900000001", "synthetic-sensitive")) {
             composeTestRule.onNodeWithText(sensitive, substring = true).assertDoesNotExist()
         }
         composeTestRule.onNodeWithText("No Level 2 match returned").assertDoesNotExist()
         composeTestRule.runOnIdle { status.value = ShieldLiveStatus() }
-        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_LIVE_STATUS_BODY).assertTextContains("No checked result is restored")
+        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_LIVE_STATUS_BODY).assertTextEquals(
+            "No ringing call is currently tracked in this process. No checked result is restored after restart.",
+        )
         composeTestRule.onNodeWithText("Legacy caller diagnostic removal", substring = true).assertDoesNotExist()
     }
 
@@ -88,22 +93,22 @@ class HomeScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithTag(HomeTestTags.VERIFIED_SUMMARY_CARD).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_STATUS_CARD).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_STATUS_TITLE).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Shield active").assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_LIVE_STATUS_CARD).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_LIVE_STATUS_TITLE).assertIsDisplayed()
-        composeTestRule.onNodeWithText("No Level 2 match returned").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.VERIFIED_SUMMARY_CARD).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_STATUS_CARD).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_STATUS_TITLE).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Shield active").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_LIVE_STATUS_CARD).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.SHIELD_LIVE_STATUS_TITLE).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("No Level 2 match returned").performScrollTo().assertIsDisplayed()
         composeTestRule.onAllNodesWithTag(HomeTestTags.REQUEST_SHIELD_PHONE_PERMISSIONS_BUTTON).assertCountEquals(0)
         composeTestRule.onAllNodesWithTag(HomeTestTags.OPEN_OVERLAY_PERMISSION_BUTTON).assertCountEquals(0)
-        composeTestRule.onNodeWithTag(HomeTestTags.REFRESH_SHIELD_STATUS_BUTTON).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.REPORTING_SLICE_CARD).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.OPEN_REPORTING_BUTTON).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.QUERY_SLICE_CARD).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.OPEN_QUERY_BUTTON).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.RESTART_ONBOARDING_BUTTON).assertIsDisplayed()
-        composeTestRule.onNodeWithText("+421***456", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.REFRESH_SHIELD_STATUS_BUTTON).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.REPORTING_SLICE_CARD).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.OPEN_REPORTING_BUTTON).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.QUERY_SLICE_CARD).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.OPEN_QUERY_BUTTON).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.RESTART_ONBOARDING_BUTTON).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("+421***456", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -131,9 +136,9 @@ class HomeScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Shield inactive").assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.REQUEST_SHIELD_PHONE_PERMISSIONS_BUTTON).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.OPEN_OVERLAY_PERMISSION_BUTTON).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(HomeTestTags.REFRESH_SHIELD_STATUS_BUTTON).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Shield inactive").performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.REQUEST_SHIELD_PHONE_PERMISSIONS_BUTTON).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.OPEN_OVERLAY_PERMISSION_BUTTON).performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HomeTestTags.REFRESH_SHIELD_STATUS_BUTTON).performScrollTo().assertIsDisplayed()
     }
 }
