@@ -1,5 +1,6 @@
 package com.example.myapplication.data.remote
 
+import com.example.myapplication.BuildConfig
 import com.example.myapplication.data.remote.ReportApi
 import com.example.myapplication.data.remote.model.ApiMeta
 import com.example.myapplication.data.remote.model.ApiMetaAdapter
@@ -29,7 +30,18 @@ object ApiClientFactory {
     }
 
     private fun createRetrofit(baseUrl: String, logHttp: Boolean = true): Retrofit {
-        val okHttpClient = OkHttpClient.Builder()
+        return Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(createHttpClient(logHttp))
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+    }
+
+    internal fun createHttpClient(
+        logHttp: Boolean = true,
+        diagnosticsEnabled: Boolean = BuildConfig.DEBUG,
+    ): OkHttpClient =
+        OkHttpClient.Builder()
             .retryOnConnectionFailure(false)
             .followRedirects(false)
             .followSslRedirects(false)
@@ -38,7 +50,7 @@ object ApiClientFactory {
             .writeTimeout(20, TimeUnit.SECONDS)
             .apply {
                 // Even BASIC logs can copy arbitrary response reasons/transport exceptions.
-                if (logHttp) {
+                if (logHttp && diagnosticsEnabled) {
                     addInterceptor(HttpLoggingInterceptor().apply {
                         level = HttpLoggingInterceptor.Level.BASIC
                     })
@@ -52,13 +64,6 @@ object ApiClientFactory {
                 } else response
             }
             .build()
-
-        return Retrofit.Builder()
-            .baseUrl(baseUrl)
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create(gson))
-            .build()
-    }
 
     fun gson(): Gson = gson
 }

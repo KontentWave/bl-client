@@ -2,7 +2,8 @@
 
 **Recorded:** 2026-10-05 14:06:15 CEST (UTC+02:00).
 **Updated:** 2026-10-05 14:23:59 CEST (UTC+02:00) - complete source review and client branch/commit/push/PR publication approved; implementation unchanged.
-**Status:** Accepted for CB-09; client source publication approved. Merge of the exact reviewed/tested head requires separate approval; deployment and distribution are not authorized.
+**Updated:** 2026-10-06 11:55:21 CEST (UTC+02:00) - reconcile separately approved PR #5 merge and current exact source tree; OTP decision unchanged.
+**Status:** Accepted; reviewed source `67d7a4509fb314fd1ec0ac47ddb4a72fc22472e5` merged through PR #5 as main `4b50be5009ddb52688cbdda0b361b47f65986e6d`. Deployment and distribution are not authorized.
 **Scope:** Active native Kotlin/Compose client. Backend source/configuration/server-owned documents remain read-only.
 
 ## Context
@@ -37,4 +38,4 @@ Targeted deterministic JVM/fake/local HTTP tests passed 69 tests / five suites. 
 
 Debug application and instrumentation APKs and release Kotlin/resources compiled. Debug lint has zero errors / 35 warnings; release lint has zero errors / 31 warnings. New Compose accessibility/terminal-state and blank-Activity correction/navigation/recreation fixtures compiled only, not executed. JVM retained-owner/fresh-model tests are not device recreation or OS process-death evidence. No new dependency, device operation, real key/binding operation, backend test/database operation, hosted request or live SMS occurred.
 
-CB-07, signing/distribution, country/length policy, actual Keystore/device/OEM/backup/transfer and hosted/live onboarding remain separate. BETA-SMS-001 and BETA-BACKEND-001 remain OPEN/BLOCKED. This decision does not establish overall closed-beta readiness.
+Backend CB-07 source is merged per the October 6 handoff; its hosted acceptance remains separate. Signing/distribution, country/length policy, actual Keystore/device/OEM/backup/transfer and hosted/live onboarding remain open. BETA-SMS-001 and BETA-BACKEND-001 remain OPEN/BLOCKED. This decision does not establish overall closed-beta readiness.
