@@ -5,6 +5,8 @@
 **Updated:** 2026-10-05 13:19:46 CEST (UTC+02:00) - approved CB-05 caller-diagnostic retention, legacy cleanup and backup guidance.
 **Updated:** 2026-10-05 13:27:35 CEST (UTC+02:00) - final CB-05 local evidence and release-test limitation; earlier timestamps/results preserved.
 **Updated:** 2026-10-05 14:06:15 CEST (UTC+02:00) - CB-09 explicit OTP correction, truthful retained-challenge guidance and local validation.
+**Updated:** 2026-10-06 12:04:48 CEST (UTC+02:00) - current merged-source reconciliation, debug-only HTTP diagnostics and bounded unsigned-candidate qualification.
+**Updated:** 2026-10-06 12:18:00 CEST (UTC+02:00) - complete seven-file source review and branch/commit/push/PR publication approved; exact-head merge requires separate approval.
 
 Android client for a privacy-focused caller-warning and community reporting service backed by a Laravel API.
 
@@ -34,6 +36,22 @@ Isolated UI tests (use a disposable offline emulator; do not launch the producti
 Do not run unfiltered instrumentation under the no-key-touch beta validation scope: the separate security tests create/delete test keys. Countdown fixtures use a blank Activity. `SessionNavigationTest` uses the debug-only `RecoveryHarnessActivity`, a fake-backed subclass executing the real `MainActivity` navigation and lifecycle code with injected ViewModel factories. It never constructs production networking or keystore factories. Target only the disposable emulator (set `ANDROID_SERIAL` if other devices are connected).
 
 Release signing and production backend readiness must be finalized before live beta distribution. A debug build is not a signed beta release.
+
+## Native candidate qualification - October 6
+
+Client main/local origin/main is `4b50be5009ddb52688cbdda0b361b47f65986e6d`, containing the merged CB-01/02/03/04/05/09 and supported CB-08 corrections. The October 2 review is historical, not a list of still-unfixed source defects. Local backend main/github/main is `b69baa34b39761218d5c7534a61e7800dbd8f81f`; CB-06/07/10 and PHP dependency remediation are merged, require PHP 8.4.1+, and require no Android wire change. Hosted revision/configuration remain unverified.
+
+This qualification adds one native correction: auth/report HTTP BASIC diagnostics now require `BuildConfig.DEBUG`, consistent with verification/key diagnostics. Shield/manual query HTTP logging remains disabled in both builds. No signing, retry, timeout, key, recovery, caller-retention or OTP persistence policy changed. Source publication is approved; the exact PR head still needs separate merge approval, and neither approval authorizes distribution.
+
+Current identity remains `com.example.myapplication`, version code `1`, name `1.0`, min/target SDK `24`/`36`, compile SDK `36.1`, with the existing fixed HTTPS API URL. No release signing configuration or beta signing identity has been established here. Durable application ID, version/update policy and signing custody need owner approval before changes/signing; changing the ID isolates existing keys/preferences, and changing the API URL changes recovery scope.
+
+The existing offline Gradle tooling executed **129 targeted JVM tests / 14 suites**, zero failures/errors/skips, including actual pure-PHP interoperability with eight report/eight query vectors. Debug app/test APKs compiled; an **unsigned release APK** was packaged at `legacy_android_kotlin\app\build\outputs\apk\release\app-release-unsigned.apk` (10,468,831 bytes), SHA-256 `C5E7EE29056DE774077F71D03B3821B236AA7F9659809BA1B2DBEBD45FF1C4B9`. It contains the local transport correction, so it is not an artifact of pristine merged HEAD or a signed beta release. APK inspection confirms non-debuggable release, no debug recovery harness and the packaged recovery/diagnostic backup exclusions. Compiled release transport defaults disable diagnostics; this is compiled evidence, not release JVM/device execution.
+
+Current lint XML reports debug **0 errors / 26 warnings**, release **0 errors / 31 warnings**. The debug warning count differs from the previous 35: nine dependency-version warnings are absent in that report; no dependency remediation or nine-warning fix is claimed. The previous 147-test full-suite evidence remains historical; this run was deliberately targeted. `testReleaseUnitTest` is still not configured.
+
+**Device execution is BLOCKED:** `adb devices -l` was empty. Existing AVD names do not establish disposability, offline isolation or absence of personal data; none was started or modified. Six reviewed fake/render-backed UI/lifecycle classes contain 16 source test cases and compiled only. Security instrumentation creates/deletes keys and was not selected. No install/update, OS process-kill, hardware-backed Keystore, telephony/OEM, accessibility-service, diagnostic-deletion or backup/transfer drill occurred.
+
+Exact commands, per-suite totals, all artifact checksums, changed-file inventory and later synthetic/device/hosted acceptance gates are in the ignored client-owned [handoff](backend-docs/client-docs/CLIENT_TO_SERVER.md). Signing/distribution, safe device scope, owner privacy/backup/recovery decisions, hosted qualification and genuine-recipient SMS remain separate approvals. **BETA-SMS-001 and BETA-BACKEND-001 remain OPEN/BLOCKED; this local task does not establish overall closed-beta readiness.**
 
 ## Key-bound session recovery
 

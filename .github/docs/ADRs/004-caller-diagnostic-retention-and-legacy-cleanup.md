@@ -3,7 +3,8 @@
 **Recorded:** 2026-10-05 13:19:46 CEST (UTC+02:00).
 **Updated:** 2026-10-05 13:27:35 CEST (UTC+02:00) - local validation and release-test availability recorded; policy unchanged.
 **Updated:** 2026-10-05 13:40:01 CEST (UTC+02:00) - source review/branch/commit/push/PR publication approved; exact-head merge approval pending.
-**Status:** Accepted for CB-05; policy and source publication approved. Exact-head merge, deployment and beta distribution are not yet approved.
+**Updated:** 2026-10-06 11:55:21 CEST (UTC+02:00) - reconcile PR #4 merge/current source; caller-retention decision unchanged.
+**Status:** Accepted; CB-05 source merged through PR #4 and retained in main `4b50be5009ddb52688cbdda0b361b47f65986e6d`. Deployment and beta distribution are separate unapproved gates.
 **Scope:** Active native Kotlin/Compose client, debug and release alike.
 
 ## Context
@@ -44,4 +45,4 @@ These are not actual Android preference deletion/cache/filesystem failure, backu
 
 Final local validation passed 133 debug JVM tests / 20 suites with PHP interoperability enabled and compiled both debug APK targets. Release Kotlin/resource compilation and release lint passed; compiled resource inspection confirms exclusion wiring. Only debug JVM tests are configured; attempted release JVM execution failed at task discovery, not within tests. The new fake-backed Home fixture was compiled, not executed. Exact commands/totals and limitations are recorded in the client-owned handoff.
 
-CB-09, backend CB-07, country/length policy and live/device validation stay separate. BETA-SMS-001 and BETA-BACKEND-001 remain OPEN/BLOCKED. Source publication is approved; exact-head merge and separate linked-handoff publication still require approval. This is not overall closed-beta readiness.
+CB-09 and backend CB-07 source are now merged per the later handoffs; country/length policy and live/device validation stay separate. BETA-SMS-001 and BETA-BACKEND-001 remain OPEN/BLOCKED. Separate linked-handoff publication is not authorized by this local qualification. This is not overall closed-beta readiness.

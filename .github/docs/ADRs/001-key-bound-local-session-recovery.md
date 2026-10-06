@@ -2,7 +2,8 @@
 
 **Recorded:** 2026-10-04 21:09:35 CEST (UTC+02:00).
 **Updated:** 2026-10-04 21:24:44 CEST (UTC+02:00) - clarify rejection handling after failed persistence.
-**Status:** Accepted for local CB-01 implementation; publication and beta distribution not approved.
+**Updated:** 2026-10-06 11:55:21 CEST (UTC+02:00) - reconcile current merged source with the preserved client handoff; recovery decision unchanged.
+**Status:** Accepted; CB-01 source merged through PR #1 and retained in main `4b50be5009ddb52688cbdda0b361b47f65986e6d`. Beta distribution and actual device/hosted qualification remain separate.
 **Scope:** Active native Kotlin/Compose client only.
 
 ## Context

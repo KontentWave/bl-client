@@ -9,6 +9,7 @@ import java.util.logging.LogRecord
 import java.util.logging.Logger
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
@@ -16,6 +17,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CallerDiagnosticLoggingTest {
+    @Test
+    fun releaseTransportOmitsHttpDiagnosticsWithoutChangingRequestPolicy() {
+        val client = ApiClientFactory.createHttpClient(diagnosticsEnabled = false)
+        assertTrue(client.interceptors.none { it is HttpLoggingInterceptor })
+        assertEquals(false, client.retryOnConnectionFailure)
+        assertEquals(false, client.followRedirects)
+        assertEquals(false, client.followSslRedirects)
+        assertEquals(15000, client.connectTimeoutMillis)
+        assertEquals(20000, client.readTimeoutMillis)
+        assertEquals(20000, client.writeTimeoutMillis)
+        assertEquals(1, client.networkInterceptors.size)
+    }
+
+    @Test
+    fun debugHttpDiagnosticsRemainOptInAndQueryAlwaysOmitsThem() {
+        val debugClient = ApiClientFactory.createHttpClient(diagnosticsEnabled = true)
+        assertEquals(
+            HttpLoggingInterceptor.Level.BASIC,
+            debugClient.interceptors.filterIsInstance<HttpLoggingInterceptor>().single().level,
+        )
+        for (debug in listOf(false, true)) {
+            val queryClient = ApiClientFactory.createHttpClient(logHttp = false, diagnosticsEnabled = debug)
+            assertTrue(queryClient.interceptors.none { it is HttpLoggingInterceptor })
+        }
+    }
+
     @Test
     fun queryHttpDoesNotLogBackendReasonOrCallerPayload() = runBlocking {
         val messages = CopyOnWriteArrayList<String>()
