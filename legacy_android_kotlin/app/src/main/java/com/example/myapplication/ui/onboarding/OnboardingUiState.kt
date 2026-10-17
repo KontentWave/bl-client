@@ -1,6 +1,11 @@
 package com.example.myapplication.ui.onboarding
 
+enum class OnboardingMode { AD_URL, OWNER_PHONE }
+
 data class OnboardingUiState(
+    val mode: OnboardingMode = OnboardingMode.AD_URL,
+    val ownerPhoneNumber: String = "",
+    val ownerPhoneError: String? = null,
     val adUrl: String = "",
     val otp: String = "",
     val isSubmitting: Boolean = false,

@@ -3,6 +3,8 @@ package com.example.myapplication.data
 interface AuthRepository {
     suspend fun initiateAuth(adUrl: String): InitiateAuthResult
 
+    suspend fun initiateOwnerAuth(phoneNumber: String): InitiateAuthResult
+
     suspend fun verifyAuth(
         challengeId: String,
         otp: String,

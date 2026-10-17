@@ -13,6 +13,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.myapplication.R
+import com.example.myapplication.phone.OwnerPhoneNumber
 import com.example.myapplication.ui.CooldownNotice
 import com.example.myapplication.ui.theme.BlacklistClientTheme
 
@@ -44,6 +46,8 @@ fun OnboardingScreen(
     onVerifyOtpClick: () -> Unit,
     onStartNewChallengeClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onModeChanged: (OnboardingMode) -> Unit = {},
+    onOwnerPhoneChanged: (String) -> Unit = {},
 ) {
     val adUrlInputDescription = stringResource(R.string.cd_ad_url_input)
     val startVerificationDescription = stringResource(R.string.cd_start_verification_button)
@@ -70,26 +74,60 @@ fun OnboardingScreen(
                 style = MaterialTheme.typography.bodyLarge,
             )
             if (!uiState.hasInitiatedChallenge && !uiState.isVerified) {
-                OutlinedTextField(
-                    value = uiState.adUrl,
-                    onValueChange = onAdUrlChanged,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(OnboardingTestTags.AD_URL_INPUT)
-                        .semantics {
-                            contentDescription = adUrlInputDescription
-                        },
-                    isError = uiState.adUrlError != null,
-                    label = { Text(text = stringResource(R.string.ad_url_label)) },
-                    placeholder = { Text(text = stringResource(R.string.ad_url_placeholder)) },
-                    supportingText = {
-                        Text(
-                            text = uiState.adUrlError ?: stringResource(R.string.ad_url_supporting_text),
-                        )
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                FilterChip(
+                    selected = uiState.mode == OnboardingMode.AD_URL,
+                    onClick = { onModeChanged(OnboardingMode.AD_URL) },
+                    enabled = !uiState.isSubmitting && !uiState.isVerifying,
+                    label = { Text(stringResource(R.string.onboarding_ad_mode)) },
+                    modifier = Modifier.testTag(OnboardingTestTags.AD_MODE),
                 )
+                FilterChip(
+                    selected = uiState.mode == OnboardingMode.OWNER_PHONE,
+                    onClick = { onModeChanged(OnboardingMode.OWNER_PHONE) },
+                    enabled = !uiState.isSubmitting && !uiState.isVerifying,
+                    label = { Text(stringResource(R.string.onboarding_owner_mode)) },
+                    modifier = Modifier.testTag(OnboardingTestTags.OWNER_MODE),
+                )
+                if (uiState.mode == OnboardingMode.OWNER_PHONE) {
+                    OutlinedTextField(
+                        value = uiState.ownerPhoneNumber,
+                        onValueChange = onOwnerPhoneChanged,
+                        enabled = !uiState.isSubmitting && !uiState.isVerifying,
+                        modifier = Modifier.fillMaxWidth().testTag(OnboardingTestTags.OWNER_PHONE_INPUT),
+                        isError = uiState.ownerPhoneError != null,
+                        label = { Text(stringResource(R.string.owner_phone_label)) },
+                        supportingText = {
+                            Text(
+                                uiState.ownerPhoneError ?: stringResource(R.string.owner_phone_supporting_text),
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = uiState.adUrl,
+                        onValueChange = onAdUrlChanged,
+                        enabled = !uiState.isSubmitting && !uiState.isVerifying,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(OnboardingTestTags.AD_URL_INPUT)
+                            .semantics {
+                                contentDescription = adUrlInputDescription
+                            },
+                        isError = uiState.adUrlError != null,
+                        label = { Text(text = stringResource(R.string.ad_url_label)) },
+                        placeholder = { Text(text = stringResource(R.string.ad_url_placeholder)) },
+                        supportingText = {
+                            Text(
+                                text = uiState.adUrlError ?: stringResource(R.string.ad_url_supporting_text),
+                            )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    )
+                }
             }
             uiState.generalError?.let { errorMessage ->
                 Text(
@@ -126,7 +164,10 @@ fun OnboardingScreen(
             if (!uiState.hasInitiatedChallenge && !uiState.isVerified) {
                 Button(
                     onClick = onStartVerificationClick,
-                    enabled = uiState.adUrl.isNotBlank() && !uiState.isSubmitting && !uiState.isVerifying && uiState.retryAfterSeconds == 0L,
+                    enabled = (if (uiState.mode == OnboardingMode.OWNER_PHONE)
+                        OwnerPhoneNumber.isValid(uiState.ownerPhoneNumber) && uiState.ownerPhoneError == null
+                        else uiState.adUrl.isNotBlank()) &&
+                        !uiState.isSubmitting && !uiState.isVerifying && uiState.retryAfterSeconds == 0L,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(OnboardingTestTags.START_VERIFICATION_BUTTON)

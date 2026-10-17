@@ -9,6 +9,10 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
 import com.example.myapplication.ui.theme.BlacklistClientTheme
@@ -20,6 +24,69 @@ import org.junit.Test
 class OnboardingScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test fun ownerChoiceAndPhoneEditingRequireExplicitSubmitEvenAfterRecomposition() {
+        val state = mutableStateOf(OnboardingUiState())
+        var commands = 0
+        composeTestRule.setContent {
+            BlacklistClientTheme {
+                OnboardingScreen(
+                    state.value, {}, { commands++ }, {}, {}, {},
+                    onModeChanged = { state.value = state.value.copy(mode = it) },
+                    onOwnerPhoneChanged = { state.value = state.value.copy(ownerPhoneNumber = it) },
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag(OnboardingTestTags.AD_URL_INPUT).assertExists()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.OWNER_MODE).performScrollTo().performClick()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.AD_URL_INPUT).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.OWNER_PHONE_INPUT).performScrollTo().performTextReplacement("+1234 5678")
+        composeTestRule.onNodeWithTag(OnboardingTestTags.START_VERIFICATION_BUTTON).assertIsNotEnabled()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.OWNER_PHONE_INPUT).performTextReplacement("+12345678")
+        composeTestRule.onNodeWithTag(OnboardingTestTags.START_VERIFICATION_BUTTON).assertIsEnabled()
+        composeTestRule.runOnIdle {
+            assertEquals(0, commands)
+            state.value = state.value.copy(generalError = "Synthetic redraw")
+        }
+        composeTestRule.onNodeWithTag(OnboardingTestTags.START_VERIFICATION_BUTTON).performScrollTo().performClick()
+        composeTestRule.runOnIdle { assertEquals(1, commands) }
+    }
+
+    @Test fun ownerPendingChallengeUsesExistingOtpCardWithoutVerifiedOrPhoneInput() {
+        composeTestRule.setContent {
+            BlacklistClientTheme {
+                OnboardingScreen(
+                    OnboardingUiState(
+                        mode = OnboardingMode.OWNER_PHONE, ownerPhoneNumber = "+12345678",
+                        challengeId = "synthetic-owner", maskedPhoneNumber = "masked",
+                        otpExpiresAt = "2030-01-01T00:15:00Z",
+                    ), {}, {}, {}, {}, {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag(OnboardingTestTags.OTP_CARD).assertExists()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.OWNER_PHONE_INPUT).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.AD_MODE).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.VERIFIED_CARD).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.NEW_CHALLENGE_BUTTON).assertIsEnabled()
+    }
+
+    @Test fun ownerUnavailableIsAccessibleWithoutAutomaticRetryHint() {
+        composeTestRule.setContent {
+            BlacklistClientTheme {
+                OnboardingScreen(
+                    OnboardingUiState(
+                        mode = OnboardingMode.OWNER_PHONE, ownerPhoneNumber = "+12345678",
+                        generalError = "Owner enrollment unavailable", isRetryableError = false,
+                    ), {}, {}, {}, {}, {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag(OnboardingTestTags.ERROR_REGION)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Assertive))
+        composeTestRule.onNodeWithText("Retry manually when available.", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(OnboardingTestTags.OTP_CARD).assertDoesNotExist()
+    }
 
     @Test fun ambiguousOtpErrorOffersAccessibleCorrectionWithoutClaimingValidity() {
         composeTestRule.setContent {

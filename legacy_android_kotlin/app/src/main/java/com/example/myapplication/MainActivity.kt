@@ -189,10 +189,12 @@ open class MainActivity : ComponentActivity() {
                         OnboardingScreen(
                             uiState = uiState,
                             onAdUrlChanged = onboardingViewModel::onAdUrlChanged,
-                            onStartVerificationClick = onboardingViewModel::submitAdUrl,
+                            onStartVerificationClick = onboardingViewModel::submitInitiation,
                             onOtpChanged = onboardingViewModel::onOtpChanged,
                             onVerifyOtpClick = onboardingViewModel::submitOtp,
                             onStartNewChallengeClick = onboardingViewModel::startNewChallenge,
+                            onModeChanged = onboardingViewModel::onModeChanged,
+                            onOwnerPhoneChanged = onboardingViewModel::onOwnerPhoneChanged,
                         )
                     }
                 }
