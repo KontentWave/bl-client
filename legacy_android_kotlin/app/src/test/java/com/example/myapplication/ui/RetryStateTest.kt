@@ -30,6 +30,7 @@ class RetryStateTest {
         override fun createBlacklistCheckRequest(targetHash: String) = SignedRequestPayload("fixture-key", "fixture-signature")
     }
     private class AuthFake : AuthRepository {
+        override suspend fun initiateOwnerAuth(phoneNumber: String): InitiateAuthResult = error("Unexpected owner initiation")
         var initiations = 0
         var verifications = 0
         var initiate: InitiateAuthResult = InitiateAuthResult.Success("original", "masked", "2030-01-01T00:15:00Z")

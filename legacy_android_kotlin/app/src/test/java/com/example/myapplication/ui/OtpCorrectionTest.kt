@@ -43,6 +43,7 @@ class OtpCorrectionTest {
         override fun createBlacklistCheckRequest(targetHash: String): SignedRequestPayload = error("No query")
     }
     private inner class AuthFake : AuthRepository {
+        override suspend fun initiateOwnerAuth(phoneNumber: String): InitiateAuthResult = error("Unexpected owner initiation")
         var initiations = 0
         val submissions = mutableListOf<Pair<String, String>>()
         var initiate: InitiateAuthResult = InitiateAuthResult.Success("original", "masked", expiry)

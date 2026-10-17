@@ -39,6 +39,7 @@ class OtpCorrectionLifecycleTest {
         var now = 0L
         val visible = mutableStateOf(true)
         val repository = object : AuthRepository {
+            override suspend fun initiateOwnerAuth(phoneNumber: String): InitiateAuthResult = error("Unexpected owner initiation")
             override suspend fun initiateAuth(adUrl: String): InitiateAuthResult {
                 initiations++
                 return InitiateAuthResult.Success("synthetic-challenge", "masked", "2030-01-01T00:15:00Z")

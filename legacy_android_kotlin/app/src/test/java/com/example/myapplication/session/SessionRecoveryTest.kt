@@ -48,6 +48,7 @@ class SessionRecoveryTest {
     private var initiations = 0
     private var verifications = 0
     private val auth = object : AuthRepository {
+        override suspend fun initiateOwnerAuth(phoneNumber: String): InitiateAuthResult = error("Recovery must not initiate owner enrollment")
         override suspend fun initiateAuth(adUrl: String): InitiateAuthResult {
             initiations++
             return InitiateAuthResult.Success("synthetic-challenge", "masked", "2030-01-01T00:15:00Z")

@@ -1,6 +1,9 @@
 package com.example.myapplication.ui.onboarding
 
 object OnboardingTestTags {
+    const val AD_MODE = "onboarding_ad_mode"
+    const val OWNER_MODE = "onboarding_owner_mode"
+    const val OWNER_PHONE_INPUT = "onboarding_owner_phone_input"
     const val NEW_CHALLENGE_BUTTON = "onboarding_new_challenge_button"
     const val AD_URL_INPUT = "ad_url_input"
     const val START_VERIFICATION_BUTTON = "start_verification_button"

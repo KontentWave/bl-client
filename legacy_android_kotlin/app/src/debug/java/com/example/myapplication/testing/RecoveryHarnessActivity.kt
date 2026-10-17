@@ -31,6 +31,10 @@ class RecoveryHarnessActivity : MainActivity() {
             override fun createBlacklistCheckRequest(targetHash: String) = error("Fake repository does not sign")
         }
         val auth = object : AuthRepository {
+            override suspend fun initiateOwnerAuth(phoneNumber: String): InitiateAuthResult {
+                RecoveryHarnessFixtures.count(this@RecoveryHarnessActivity, "owner_initiate")
+                return InitiateAuthResult.Success("synthetic-owner", "masked", "2030-01-01T00:15:00Z")
+            }
             override suspend fun initiateAuth(adUrl: String): InitiateAuthResult {
                 RecoveryHarnessFixtures.count(this@RecoveryHarnessActivity, "initiate")
                 return InitiateAuthResult.Success("synthetic", "masked", "2030-01-01T00:15:00Z")

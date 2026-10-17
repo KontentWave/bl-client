@@ -25,6 +25,7 @@ import java.time.Instant
 import java.time.format.DateTimeParseException
 import com.example.myapplication.ui.RetryCooldown
 import com.example.myapplication.session.SessionRecovery
+import com.example.myapplication.phone.OwnerPhoneNumber
 
 class OnboardingViewModel(
     private val authRepository: AuthRepository,
@@ -40,6 +41,7 @@ class OnboardingViewModel(
         generalError = sessionRecovery?.state?.value?.message,
     ))
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
+    private var ownerPhoneInputTooLong = false
     private val cooldown = RetryCooldown(viewModelScope, nowMillis) { remaining ->
         _uiState.update { it.copy(retryAfterSeconds = remaining) }
     }
@@ -61,7 +63,34 @@ class OnboardingViewModel(
         }
     }
 
+    fun onModeChanged(mode: OnboardingMode) {
+        val current = uiState.value
+        if (current.isSubmitting || current.isVerifying || current.hasInitiatedChallenge || current.isVerified) return
+        _uiState.update {
+            it.copy(
+                mode = mode, adUrlError = null,
+                ownerPhoneError = if (ownerPhoneInputTooLong) it.ownerPhoneError else null,
+                generalError = null, isRetryableError = false,
+            )
+        }
+    }
+
+    fun onOwnerPhoneChanged(value: String) {
+        val current = uiState.value
+        if (current.isSubmitting || current.isVerifying || current.hasInitiatedChallenge || current.isVerified) return
+        if (value.length > 16) {
+            ownerPhoneInputTooLong = true
+            _uiState.update { it.copy(ownerPhoneError = "Phone number must not exceed 16 characters including +.") }
+            return
+        }
+        ownerPhoneInputTooLong = false
+        _uiState.update {
+            it.copy(ownerPhoneNumber = value, ownerPhoneError = null, generalError = null, isRetryableError = false)
+        }
+    }
+
     fun onAdUrlChanged(value: String) {
+        if (uiState.value.isSubmitting || uiState.value.isVerifying) return
         if (value.length > 2048) {
             _uiState.update { it.copy(adUrlError = "Ad URL must not exceed 2048 characters.") }
             return
@@ -90,11 +119,23 @@ class OnboardingViewModel(
         }
     }
 
+    // Retained entry point for existing ad-only callers and fixtures.
     fun submitAdUrl() {
-        if (uiState.value.isSubmitting || uiState.value.isVerifying || cooldown.remainingSeconds > 0) return
-        if (uiState.value.adUrlError == "Ad URL must not exceed 2048 characters.") return
-        val currentAdUrl = uiState.value.adUrl.trim()
-        if (currentAdUrl.isBlank() || currentAdUrl.length > 2048) {
+        if (uiState.value.mode == OnboardingMode.AD_URL) submitInitiation()
+    }
+
+    fun submitInitiation() {
+        val current = uiState.value
+        if (current.isSubmitting || current.isVerifying || current.isVerified || cooldown.remainingSeconds > 0) return
+        val ownerMode = current.mode == OnboardingMode.OWNER_PHONE
+        if (!ownerMode && current.adUrlError == "Ad URL must not exceed 2048 characters.") return
+        val currentAdUrl = current.adUrl.trim()
+        val phone = current.ownerPhoneNumber
+        if (ownerMode && (ownerPhoneInputTooLong || !OwnerPhoneNumber.isValid(phone))) {
+            _uiState.update { it.copy(ownerPhoneError = "Use + and 8-15 digits, starting with a nonzero digit; no spaces.") }
+            return
+        }
+        if (!ownerMode && (currentAdUrl.isBlank() || currentAdUrl.length > 2048)) {
             _uiState.update {
                 it.copy(adUrlError = "Escort ad URL is required.")
             }
@@ -108,6 +149,7 @@ class OnboardingViewModel(
                     adUrl = currentAdUrl,
                     isSubmitting = true,
                     adUrlError = null,
+                    ownerPhoneError = null,
                     otpError = null,
                     generalError = null,
                     isRetryableError = false,
@@ -116,7 +158,8 @@ class OnboardingViewModel(
                 )
             }
 
-            when (val result = authRepository.initiateAuth(currentAdUrl)) {
+            when (val result = if (ownerMode) authRepository.initiateOwnerAuth(phone)
+                else authRepository.initiateAuth(currentAdUrl)) {
                 is InitiateAuthResult.Success -> {
                     _uiState.update {
                         it.copy(
@@ -125,6 +168,7 @@ class OnboardingViewModel(
                             maskedPhoneNumber = result.maskedPhoneNumber,
                             otpExpiresAt = result.otpExpiresAt,
                             adUrlError = null,
+                            ownerPhoneError = null,
                             otp = "",
                             otpError = null,
                             generalError = null,
@@ -139,17 +183,18 @@ class OnboardingViewModel(
 
                 is InitiateAuthResult.Failure -> {
                     cooldown.extend(result.retryAfterSeconds)
-                    val fieldError = result.fieldErrors["ad_url"]?.firstOrNull()
+                    val fieldError = result.fieldErrors[if (ownerMode) "phone_number" else "ad_url"]?.firstOrNull()
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
-                            adUrlError = fieldError,
+                            adUrlError = if (ownerMode) null else fieldError,
+                            ownerPhoneError = if (ownerMode) fieldError else null,
                             otpError = null,
                             generalError = if (fieldError != null && it.hasInitiatedChallenge) fieldError
                                 else if (fieldError == null) result.message +
                                 if (result.code == "sms_dispatch_failed" || result.code == "response_parse_failed")
                                     " SMS delivery may have occurred. Wait before a manual resend." else "" else null,
-                            isRetryableError = result.retryable,
+                            isRetryableError = result.retryable && result.code != "owner_enrollment_unavailable",
                             challengeRetryGuidance = if (it.hasInitiatedChallenge && !it.isChallengeLocked)
                                 "The retained challenge's server status is unknown. You can try its OTP manually before the recorded expiry, or request a new challenge when allowed."
                                 else it.challengeRetryGuidance,
@@ -311,12 +356,13 @@ class OnboardingViewModel(
 
     fun startNewChallenge() {
         // Explicit resend: keep the old challenge until the server returns a new one.
-        submitAdUrl()
+        submitInitiation()
     }
 
     fun restartOnboarding() {
         if (uiState.value.isSubmitting || uiState.value.isVerifying) return
         sessionRecovery?.forgetLocalHint()
+        ownerPhoneInputTooLong = false
         _uiState.value = OnboardingUiState(retryAfterSeconds = cooldown.remainingSeconds)
     }
 

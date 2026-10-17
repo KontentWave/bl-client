@@ -4,11 +4,15 @@ import android.util.Log
 import com.example.myapplication.BuildConfig
 import com.example.myapplication.data.remote.AuthApi
 import com.example.myapplication.data.remote.model.InitiateAuthRequest
+import com.example.myapplication.data.remote.model.InitiateAuthSuccessEnvelope
+import com.example.myapplication.data.remote.model.InitiateOwnerAuthRequest
 import com.example.myapplication.data.remote.model.VerifyAuthRequest
+import com.example.myapplication.phone.OwnerPhoneNumber
 import com.google.gson.Gson
 import com.google.gson.stream.MalformedJsonException
 import kotlinx.coroutines.CancellationException
 import retrofit2.HttpException
+import retrofit2.Response
 import java.io.IOException
 import java.security.MessageDigest
 
@@ -19,13 +23,31 @@ class AuthRepositoryImpl(
     private val gson: Gson,
 ) : AuthRepository {
     override suspend fun initiateAuth(adUrl: String): InitiateAuthResult {
-        val normalizedAdUrl = adUrl.trim()
+        return initiate { authApi.initiateAuth(InitiateAuthRequest(adUrl = adUrl.trim())) }
+    }
 
+    override suspend fun initiateOwnerAuth(phoneNumber: String): InitiateAuthResult {
+        if (!OwnerPhoneNumber.isValid(phoneNumber)) {
+            return InitiateAuthResult.Failure(
+                code = "validation_failed",
+                message = "Enter a canonical international phone number.",
+                fieldErrors = mapOf("phone_number" to listOf("Use + and 8-15 digits, starting with a nonzero digit; no spaces.")),
+            )
+        }
+        return initiate { authApi.initiateOwnerAuth(InitiateOwnerAuthRequest(phoneNumber)) }
+    }
+
+    private suspend fun initiate(
+        request: suspend () -> Response<InitiateAuthSuccessEnvelope>,
+    ): InitiateAuthResult {
         return try {
-            val response = authApi.initiateAuth(InitiateAuthRequest(adUrl = normalizedAdUrl))
+            val response = request()
             if (response.isSuccessful) {
                 val body = response.body()
-                if (body?.success == true) {
+                if (response.code() == 201 && body?.success == true && body.code == "auth.sms_initiated" &&
+                    !body.data.challengeId.isNullOrBlank() && !body.data.maskedPhoneNumber.isNullOrBlank() &&
+                    !body.data.otpExpiresAt.isNullOrBlank()
+                ) {
                     InitiateAuthResult.Success(
                         challengeId = body.data.challengeId,
                         maskedPhoneNumber = body.data.maskedPhoneNumber,
@@ -38,7 +60,9 @@ class AuthRepositoryImpl(
                     )
                 }
             } else {
-                ApiFailure.parse(response).toInitiateFailure()
+                val failure = ApiFailure.parse(response).toInitiateFailure()
+                if (failure.code == "owner_enrollment_unavailable") failure.copy(retryable = false)
+                else failure
             }
         } catch (_: MalformedJsonException) {
             InitiateAuthResult.Failure(
@@ -85,7 +109,7 @@ class AuthRepositoryImpl(
             val response = authApi.verifyAuth(request)
             if (response.isSuccessful) {
                 val body = response.body()
-                if (body?.success == true) {
+                if (response.code() == 200 && body?.success == true && body.code == "auth.verified") {
                     VerifyAuthResult.Success(
                         challengeId = body.data.challengeId,
                         maskedPhoneNumber = body.data.maskedPhoneNumber,
