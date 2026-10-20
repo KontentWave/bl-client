@@ -74,6 +74,22 @@ class SessionRecoveryTest {
         auth, signer, { scheduler.currentTime }, { Instant.parse(time) }, false, recovery,
     ).also { viewModels.put("onboarding", it) }
 
+    @Test fun offsetVerifiedTimesSaveAndRestoreWithoutRewritingMetadata() {
+        for (timestamp in listOf(
+            "2030-01-01T00:00:00Z", "2030-01-01T00:00:00+00:00",
+            "2030-01-01T02:00:00.123+02:00",
+        )) {
+            recovery().recordVerified(pem, timestamp)
+            assertEquals(timestamp, store.values["verified_at"])
+            val restored = recovery().state.value
+            assertTrue(restored.restored)
+            assertEquals(timestamp, restored.metadata?.verifiedAt)
+            assertEquals(SessionRecovery.keyFingerprint(publicKey), restored.metadata?.keyFingerprint)
+            assertEquals(0, initiations)
+            assertEquals(0, verifications)
+        }
+    }
+
     @Test fun successfulVerificationRecordsOnlyKeyBoundNonSecretMetadata() {
         val vm = vm(recovery())
         vm.onAdUrlChanged("https://portal.example.test/synthetic")
@@ -164,10 +180,75 @@ class SessionRecoveryTest {
         assertEquals(0, lookups)
     }
 
-    @Test fun differentBackendCannotReuseHint() {
+    @Test fun differentBackendRetainsHintWithoutRestoringOrAccessingKey() {
         seeded()
-        assertNull(recovery("other-backend").state.value.metadata)
-        assertTrue(store.values.isEmpty())
+        val saved = store.values.toMap()
+        lookups = 0
+        val beta = recovery("https://beta.zafo-forum.sk/api/")
+        val vm = vm(beta)
+        beta.refresh(); scheduler.runCurrent()
+        assertNull(beta.state.value.metadata)
+        assertFalse(beta.state.value.restored)
+        assertFalse(vm.uiState.value.isVerified)
+        assertTrue(beta.state.value.message!!.contains("server has changed"))
+        assertEquals(saved, store.values)
+        assertEquals(ExistingKey.Available(publicKey), key)
+        assertEquals(0, lookups)
+        assertEquals(0, initiations + verifications)
+        assertNotNull(recovery().state.value.metadata)
+    }
+
+    @Test fun foreignBackendRejectionAndExplicitOnboardingCannotErasePreviousHint() {
+        seeded()
+        val saved = store.values.toMap()
+        val beta = recovery("https://beta.zafo-forum.sk/api/")
+        beta.authorizationRejected(pem)
+        val vm = vm(beta)
+        vm.restartOnboarding(); scheduler.runCurrent()
+        assertEquals(saved, store.values)
+        assertNull(beta.state.value.metadata)
+        assertFalse(vm.uiState.value.isVerified)
+        assertEquals(ExistingKey.Available(publicKey), key)
+        assertEquals(0, initiations + verifications)
+    }
+
+    @Test fun explicitVerificationOnNewBackendRecordsSameKeyForThatBackendOnly() {
+        seeded()
+        val betaScope = "https://beta.zafo-forum.sk/api/"
+        val beta = recovery(betaScope)
+        val vm = vm(beta)
+        vm.onAdUrlChanged("https://portal.example.test/synthetic")
+        vm.submitAdUrl(); scheduler.runCurrent()
+        assertFalse(vm.uiState.value.isVerified)
+        assertEquals("synthetic-backend", store.values["backend_scope"])
+        vm.onOtpChanged("000000"); vm.submitOtp(); scheduler.runCurrent()
+        assertTrue(vm.uiState.value.isVerified)
+        assertEquals(betaScope, store.values["backend_scope"])
+        assertEquals(SessionRecovery.keyFingerprint(publicKey), store.values["key_fingerprint"])
+        assertEquals(ExistingKey.Available(publicKey), key)
+        assertNotNull(recovery(betaScope).state.value.metadata)
+        assertNull(recovery().state.value.metadata)
+        assertEquals(betaScope, store.values["backend_scope"])
+        assertEquals(1, initiations)
+        assertEquals(1, verifications)
+    }
+
+    @Test fun failedNewBackendPersistenceNeverSchedulesDeletionOfOldBackendHint() {
+        seeded()
+        val saved = store.values.toMap()
+        for (rejectBeforeRefresh in listOf(false, true)) {
+            val beta = recovery("https://beta.zafo-forum.sk/api/")
+            store.writable = false
+            beta.recordVerified(pem, time)
+            assertNotNull(beta.state.value.metadata)
+            store.writable = true
+            if (rejectBeforeRefresh) beta.authorizationRejected(pem)
+            beta.refresh()
+            assertNull(beta.state.value.metadata)
+            assertEquals(saved, store.values)
+            assertEquals(ExistingKey.Available(publicKey), key)
+        }
+        assertEquals(0, initiations + verifications)
     }
 
     @Test fun rejectionPropagatesToAlreadyOwnedOnboardingViewModel() {

@@ -3,6 +3,7 @@
 **Recorded:** 2026-10-04 21:09:35 CEST (UTC+02:00).
 **Updated:** 2026-10-04 21:24:44 CEST (UTC+02:00) - clarify rejection handling after failed persistence.
 **Updated:** 2026-10-06 11:55:21 CEST (UTC+02:00) - reconcile current merged source with the preserved client handoff; recovery decision unchanged.
+**Updated:** 2026-10-20 22:54:38 CEST (UTC+02:00; verified local clock) - retain foreign-backend hints during explicit beta-host migration without restoring authorization or resetting keys.
 **Status:** Accepted; CB-01 source merged through PR #1 and retained in main `4b50be5009ddb52688cbdda0b361b47f65986e6d`. Beta distribution and actual device/hosted qualification remain separate.
 **Scope:** Active native Kotlin/Compose client only.
 
@@ -18,13 +19,15 @@ Persist version, configured backend scope, SHA-256 of the submitted public key's
 
 `SessionRecovery` is shared by production onboarding/report/manual-query/Shield factories. Restoration and resume check metadata and the existing key locally without generating, deleting or signing a request. Missing/invalid/changed keys and malformed/incomplete/wrong-backend records fail closed for restored navigation; unavailable keys retain metadata and can be rechecked on resume. Existing-only report/query signing leaves canonical fields, PEM normalization, signature encoding and successful response behavior unchanged.
 
+For a well-formed wrong-backend record, fail closed before key lookup but retain the record unchanged. A configured-host change is not revocation and cannot authorize the new host. Foreign-scope rejection or opening onboarding must not remove the old hint. Only successful explicit signed verification may replace the single recovery record with the new backend scope and matched existing key fingerprint. This is neither a binding import nor automatic reauthorization; package ID, publisher identity, app data and device keys remain intact across replacement updates.
+
 Do not use reporting as a validation probe or manufacture a validation endpoint. Restoration does not initiate, verify, report or query. The home card describes historical local recovery and unconfirmed current authorization; Shield permission readiness is explicitly not a successful lookup. Incoming-call events remain independent signed-query triggers.
 
 Well-formed HTTP 403 report `device_not_bound` or query `blacklist_query_unauthorized` invalidates the matching hint, even if verification metadata was not persisted. Match against the current live identity first, then stored identity if no live record exists; stale stored metadata cannot invalidate a newer differently keyed live verification. The query discriminator combines signature/binding rejection, so no revocation claim is made. Malformed envelopes, unrelated signature errors, throttling and temporary network/server failures do not clear a valid hint.
 
 Exclude `device_binding_recovery.xml` from legacy backup, API 31+ cloud backup and device transfer. Matching usable key identity is mandatory even if preferences are copied manually. This is not a CB-05 caller-diagnostic backup/retention fix.
 
-Explicitly reopening onboarding removes only the local hint and opens the URL form without SMS. Explicit OTP verification may create an absent key; unacceptable existing keys fail rather than being replaced. No migration can infer an old server binding from an existing key alone.
+Explicitly reopening onboarding removes only the current-backend local hint, retains foreign-backend metadata and opens the form without SMS. Explicit OTP verification may create an absent key; unacceptable existing keys fail rather than being replaced. No migration can infer an old server binding from an existing key alone.
 
 ## Consequences and limits
 

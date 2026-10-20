@@ -1,10 +1,12 @@
 package com.example.myapplication.data
 
+import com.example.myapplication.BuildConfig
 import com.example.myapplication.data.remote.ApiClientFactory
 import com.example.myapplication.data.remote.AuthApi
 import com.google.gson.JsonParser
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -35,6 +37,15 @@ class OwnerAuthRepositoryTest {
     }
 
     @After fun teardown() { server.shutdown() }
+
+    @Test fun activeBetaBaseResolvesExistingRelativeRoutesWithoutDuplicatingApi() {
+        assertEquals("https://beta.zafo-forum.sk/api/", BuildConfig.API_BASE_URL)
+        val base = BuildConfig.API_BASE_URL.toHttpUrl()
+        for (path in listOf("auth/owner/initiate", "auth/initiate", "auth/verify", "reports", "blacklist/check")) {
+            assertEquals("https://beta.zafo-forum.sk/api/$path", base.resolve(path).toString())
+        }
+        assertEquals(0, server.requestCount)
+    }
 
     private fun error(status: Int, code: String, errors: String = "{}", meta: String = "{\"retryable\":false}") {
         server.enqueue(MockResponse().setResponseCode(status).setBody(

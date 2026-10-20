@@ -176,17 +176,21 @@ Identity/version implementation and its bounded compilation/main-manifest qualif
 
 ## Key-bound session recovery
 
+**Updated:** 2026-10-20 23:31:36 CEST (UTC+02:00; verified local clock). Installed beta.3 uses `https://beta.zafo-forum.sk/api/`, retaining the beta.2 timestamp correction and existing Owner phone/SMS OTP screens. The owner reports smooth onboarding after the in-place update; this is not independently observed SMS delivery or a device-key continuity comparison. The incoming-call/Waiting issue remains unresolved separately. No invitation screen or new wire contract is needed. Existing older-host enrollment is not beta authorization: beta requires explicit received-OTP verification with the existing device key. Same-ID/same-publisher updates must never uninstall, clear data or reset keys.
+
 After a successful explicit OTP verification, the native client stores only a schema version, backend scope, SHA-256 public-key fingerprint and historical verification timestamp in `device_binding_recovery`. The fingerprint is derived from the submitted public key and must match the existing usable device key. No OTP, challenge, recipient/masked number, ad URL, signed request or private key is persisted for recovery.
 
 A fresh process with matching metadata/key opens the ordinary workspace without sending SMS or replaying any API command. The home card explicitly labels this as **local recovery**, not current server authorization or a successful Shield lookup. The existing contract has no dedicated session-validation endpoint; restoration does not use reports or synthetic lookups as probes. Only ordinary user-submitted operations or independent incoming-call events make signed requests.
 
 Absent/invalid/mismatched metadata or missing/invalid/changed keys cannot restore workspace access. Temporarily unavailable keys retain the hint on disk and show a recovery error; reopening/resuming rechecks locally. Recovery and report/query signing never create or replace a key. Explicit OTP verification may create an absent key; an unacceptable existing key now fails without replacement. Reset/replacement of an existing key requires a separately approved recovery procedure.
 
+Well-formed metadata for a different backend is retained unchanged, without looking up the key, restoring workspace access or issuing requests. Current-backend rejection and reopening onboarding cannot erase that foreign hint. Only successful explicit signed verification replaces the single record with the newly verified backend scope; no old binding is imported or assumed valid on beta.
+
 Well-formed HTTP 403 `device_not_bound` (report) or `blacklist_query_unauthorized` (manual/Shield query) removes the matching hint and returns the open UI to onboarding, including when successful verification could not be persisted. The query code conflates signature and binding failures, so it is an authorization rejection, not proof of revocation. Network errors, 429, 503 and malformed errors retain valid hints. Storage failures are surfaced; they are not claimed as successful persistence/removal.
 
 The preference is excluded from legacy cloud backup and Android 12+ cloud backup/device transfer. A transferred preference still cannot restore access without the matching usable key. Caller diagnostics have their own no-persistence policy below; recovery metadata/key behavior is unchanged. Older installations with a bound key but no recovery record cannot be migrated by guessing server authorization; one explicit verification is needed to record the hint.
 
-`Restart onboarding` opens the URL form and removes only the local hint; it no longer resends a remembered URL immediately. It does not reset the key or server binding, and retained monotonic cooldowns remain enforced.
+`Restart onboarding` opens the form and removes only the current-backend local hint, retaining foreign-backend metadata; it never resends a remembered input automatically. It does not reset the key or server binding, and retained monotonic cooldowns remain enforced.
 
 Focused recovery tests:
 

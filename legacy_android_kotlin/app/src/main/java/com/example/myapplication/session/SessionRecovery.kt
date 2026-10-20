@@ -1,10 +1,9 @@
 package com.example.myapplication.session
 
 import com.example.myapplication.security.PublicKeyPemEncoder
+import com.example.myapplication.time.ServerTimestamp
 import java.security.MessageDigest
 import java.security.PublicKey
-import java.time.Instant
-import java.time.format.DateTimeParseException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -61,11 +60,18 @@ class SessionRecovery(
         }
         val fingerprint = values["key_fingerprint"] as? String
         val verifiedAt = values["verified_at"] as? String
-        if (values["version"] != "1" || values["backend_scope"] != backendScope ||
+        val savedScope = values["backend_scope"] as? String
+        if (values["version"] != "1" || savedScope.isNullOrBlank() ||
             fingerprint == null || !fingerprint.matches(Regex("[0-9a-f]{64}")) ||
             verifiedAt == null || !validTimestamp(verifiedAt)
         ) {
             discard("Saved device recovery metadata is invalid. Verify this device explicitly.")
+            return
+        }
+        if (savedScope != backendScope) {
+            // A host change is not revocation. Retain the old hint, but never reuse it here.
+            mutableState.value = RecoveryState(message =
+                "The API server has changed. Verify this device explicitly on this server. Previous recovery metadata and the device key were retained; no SMS was sent automatically.")
             return
         }
         when (val key = keys.lookup()) {
@@ -107,7 +113,9 @@ class SessionRecovery(
             "key_fingerprint" to submittedFingerprint,
             "verified_at" to verifiedAt,
         ))
-        storageBlocked = !saved
+        // A failed replacement must not schedule deletion of the previous host's hint.
+        val savedScope = store.read()["backend_scope"] as? String
+        storageBlocked = !saved && (savedScope == null || savedScope == backendScope)
         mutableState.value = RecoveryState(
             metadata = BindingMetadata(submittedFingerprint, verifiedAt),
             message = if (saved) null else "Device verification succeeded, but recovery metadata could not be saved. A restart may require verification.",
@@ -117,16 +125,29 @@ class SessionRecovery(
     @Synchronized
     fun authorizationRejected(publicKeyPem: String) {
         val fingerprint = keyFingerprint(PublicKeyPemEncoder.fromPem(publicKeyPem))
+        val saved = store.read()
         // Prefer live identity if a newer verification could not be persisted.
         val currentFingerprint = mutableState.value.metadata?.keyFingerprint
-            ?: store.read()["key_fingerprint"] as? String
+            ?: saved.takeIf { it["backend_scope"] == backendScope }
+                ?.get("key_fingerprint") as? String
         if (currentFingerprint == fingerprint) {
-            discard("The server rejected device authorization. Verify explicitly or contact support; no SMS was sent automatically.")
+            val message = "The server rejected device authorization. Verify explicitly or contact support; no SMS was sent automatically."
+            if (saved["backend_scope"] is String && saved["backend_scope"] != backendScope) {
+                storageBlocked = false
+                mutableState.value = RecoveryState(message = message)
+            } else {
+                discard(message)
+            }
         }
     }
 
     @Synchronized
     fun forgetLocalHint() {
+        val savedScope = store.read()["backend_scope"] as? String
+        if (savedScope != null && savedScope != backendScope) {
+            refresh()
+            return
+        }
         discard("Onboarding was opened explicitly. No SMS has been sent and the existing key/server binding was not reset.")
     }
 
@@ -137,12 +158,7 @@ class SessionRecovery(
             "$message Saved recovery metadata could not be removed.")
     }
 
-    private fun validTimestamp(value: String): Boolean = try {
-        Instant.parse(value)
-        true
-    } catch (_: DateTimeParseException) {
-        false
-    }
+    private fun validTimestamp(value: String): Boolean = ServerTimestamp.parse(value) != null
 
     companion object {
         fun keyFingerprint(key: PublicKey): String = MessageDigest.getInstance("SHA-256")
