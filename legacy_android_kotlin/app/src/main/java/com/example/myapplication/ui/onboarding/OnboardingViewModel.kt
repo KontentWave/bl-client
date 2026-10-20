@@ -22,7 +22,7 @@ import android.util.Base64
 import java.security.MessageDigest
 import java.security.Signature
 import java.time.Instant
-import java.time.format.DateTimeParseException
+import com.example.myapplication.time.ServerTimestamp
 import com.example.myapplication.ui.RetryCooldown
 import com.example.myapplication.session.SessionRecovery
 import com.example.myapplication.phone.OwnerPhoneNumber
@@ -229,11 +229,7 @@ class OnboardingViewModel(
             return
         }
 
-        val expiry = try {
-            currentState.otpExpiresAt?.let(Instant::parse)
-        } catch (_: DateTimeParseException) {
-            null
-        }
+        val expiry = ServerTimestamp.parse(currentState.otpExpiresAt)
         if (expiry == null || nowInstant().isAfter(expiry)) {
             _uiState.update {
                 it.copy(

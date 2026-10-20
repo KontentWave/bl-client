@@ -15,11 +15,11 @@ android {
         applicationId = "bl.zafo"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-beta.1"
+        versionCode = 3
+        versionName = "0.1.0-beta.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "API_BASE_URL", "\"https://bcuszlr92817.zafo-forum.sk/api/\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://beta.zafo-forum.sk/api/\"")
     }
 
     buildTypes {

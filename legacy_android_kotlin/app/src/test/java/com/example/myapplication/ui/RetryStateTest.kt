@@ -24,8 +24,12 @@ class RetryStateTest {
     private val dispatcher = StandardTestDispatcher(scheduler)
     private val store = ViewModelStore()
     private val start = Instant.parse("2030-01-01T00:00:00Z")
+    private var verifySignatures = 0
     private val signer = object : SignedRequestFactory {
-        override fun createVerifyRequest(challengeId: String) = SignedRequestPayload("fixture-key", "fixture-signature")
+        override fun createVerifyRequest(challengeId: String): SignedRequestPayload {
+            verifySignatures++
+            return SignedRequestPayload("fixture-key", "fixture-signature")
+        }
         override fun createReportRequest(clientPhoneNumber: String, feature: String) = SignedRequestPayload("fixture-key", "fixture-signature")
         override fun createBlacklistCheckRequest(targetHash: String) = SignedRequestPayload("fixture-key", "fixture-signature")
     }
@@ -107,6 +111,44 @@ class RetryStateTest {
         vm.onOtpChanged("000000"); vm.submitOtp(); scheduler.runCurrent()
         assertEquals(0, fake.verifications)
         assertTrue(vm.uiState.value.isChallengeLocked)
+    }
+
+    @Test fun futureAndExactBoundaryOffsetExpiriesAllowOnlyExplicitVerification() {
+        for (expiry in listOf(
+            "2030-01-01T00:15:00Z", "2030-01-01T00:15:00+00:00",
+            "2030-01-01T02:15:00+02:00", "2029-12-31T19:15:00-05:00",
+            "2030-01-01T00:00:00+00:00",
+        )) {
+            val fake = AuthFake().also { it.initiate = InitiateAuthResult.Success("original", "masked", expiry) }
+            val vm = auth(fake)
+            val signaturesBefore = verifySignatures
+            vm.submitAdUrl(); scheduler.runCurrent()
+            vm.onOtpChanged("000000"); scheduler.runCurrent()
+            assertEquals(0, fake.verifications)
+            assertEquals(signaturesBefore, verifySignatures)
+            vm.submitOtp(); scheduler.runCurrent()
+            assertEquals(expiry, 1, fake.verifications)
+            assertEquals(signaturesBefore + 1, verifySignatures)
+            assertFalse(vm.uiState.value.isChallengeLocked)
+        }
+    }
+
+    @Test fun invalidAndExpiredExpiriesNeverSignOrSend() {
+        for (expiry in listOf(
+            "", "invalid", "2030-01-01T00:15:00", "2030-02-30T00:15:00+00:00",
+            "2029-12-31T23:59:59+00:00",
+        )) {
+            val fake = AuthFake().also { it.initiate = InitiateAuthResult.Success("original", "masked", expiry) }
+            val vm = auth(fake)
+            vm.submitAdUrl(); scheduler.runCurrent()
+            vm.onOtpChanged("000000"); vm.submitOtp(); scheduler.runCurrent()
+            assertEquals(expiry, 0, fake.verifications)
+            assertEquals(0, verifySignatures)
+            assertTrue(expiry, vm.uiState.value.isChallengeLocked)
+            vm.submitOtp(); scheduler.runCurrent()
+            assertEquals(0, fake.verifications)
+            assertEquals(1, fake.initiations)
+        }
     }
 
     @Test fun duplicateAuthCommandsAreGuardedBeforeCoroutineStarts() {
