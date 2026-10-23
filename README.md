@@ -1,6 +1,7 @@
 # Blacklist Client
 
-**Last documentation update:** 2026-10-17 17:01:48 CEST (UTC+02:00; Windows Central Europe Standard Time) - documentation-only reconciliation of owner-reported publisher/backup completion and October 9 beta acceptance. Recovery remains untested, not a candidate-signing prerequisite; no new source/build/test/key/device/hosted execution. Earlier evidence retains its original date and scope.
+**Last documentation update:** 2026-10-22 (date only) - record reported call-warning visibility/device restrictions and owner acceptance below; documentation only, no new device test or source change. Earlier evidence retains its original date and scope.
+**Updated:** 2026-10-17 17:01:48 CEST (UTC+02:00; Windows Central Europe Standard Time) - documentation-only reconciliation of owner-reported publisher/backup completion and October 9 beta acceptance. Recovery remains untested, not a candidate-signing prerequisite; no new source/build/test/key/device/hosted execution. Earlier evidence retains its original date and scope.
 **Updated:** 2026-10-05 11:30:31 CEST (UTC+02:00) - local CB-03/CB-04 call-lifecycle/deadline guidance; earlier evidence retains its original timestamp.
 **Updated:** 2026-10-05 13:19:46 CEST (UTC+02:00) - approved CB-05 caller-diagnostic retention, legacy cleanup and backup guidance.
 **Updated:** 2026-10-05 13:27:35 CEST (UTC+02:00) - final CB-05 local evidence and release-test limitation; earlier timestamps/results preserved.
@@ -231,6 +232,15 @@ Set-Location legacy_android_kotlin
 These two environment values are WSL filesystem paths passed to PHP, not PowerShell navigation paths. Set them for your explicitly selected local checkouts; `CB02_WSL_DISTRO` defaults to `Ubuntu-22.04`. Without both values, the optional JVM interoperability test is skipped rather than claimed as passing. Its client-owned PHP harness loads only the actual backend normalizer/signature service files: no Laravel boot, `.env`, database, cache, hosted request or SMS. Ephemeral private keys stay in JVM memory; only synthetic signed fixtures go through stdin. Successful PHP verification is stronger than Java self-verification, but does not establish HTTP authorization, database reporting, hardware-backed Android signing or hosted compatibility.
 
 ## Incoming-call lifecycle and lookup deadline
+
+### Reported device limitations and owner disposition - October 22, 2026
+
+- **Warning visibility:** the system incoming-call notification can obscure the app warning. A warning must not be assumed visible merely because it is displayed beneath system UI.
+- **Overlay permission:** one tester's phone restricts overlay permission; that device's overlay warning remains **unverified**, not a passing test or a demonstrated app regression. The exact OS/hardware cause has not been independently diagnosed here.
+- **Owner acceptance:** the owner accepts these as system/device limitations and will warn beta participants. A compatible replacement Android phone may be considered voluntarily; no model, price or purchase guarantees compatibility, and purchasing a phone is not a beta requirement.
+- **Scope:** this records reported results and the owner's decision, not a new assistant-run test or an app fix. It does not establish that the earlier Waiting-during-ringing issue is universally resolved or certify warning visibility on every device. See the [integration map](.github/docs/plugin_integration_map.md#verification-scope-and-open-gates) for remaining verification boundaries.
+
+### Lifecycle policy and local tests
 
 The native receiver shares one process-owned call coordinator across receiver instances. Warnings are **ringing-only**: OFFHOOK (answer) and IDLE (reject/end) cancel lookup and dismiss the warning. Repeated ringing events and equivalent number formats do not query again. A different valid number replaces the current lookup; cancelled/old results cannot overwrite its warning or status.
 
