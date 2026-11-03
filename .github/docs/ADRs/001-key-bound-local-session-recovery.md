@@ -4,6 +4,7 @@
 **Updated:** 2026-10-04 21:24:44 CEST (UTC+02:00) - clarify rejection handling after failed persistence.
 **Updated:** 2026-10-06 11:55:21 CEST (UTC+02:00) - reconcile current merged source with the preserved client handoff; recovery decision unchanged.
 **Updated:** 2026-10-20 22:54:38 CEST (UTC+02:00; verified local clock) - retain foreign-backend hints during explicit beta-host migration without restoring authorization or resetting keys.
+**Updated:** 2026-11-03 - CB-11 corrects the query discriminator to HTTP 401; recovery policy and report HTTP 403 handling are unchanged.
 **Status:** Accepted; CB-01 source merged through PR #1 and retained in main `4b50be5009ddb52688cbdda0b361b47f65986e6d`. Beta distribution and actual device/hosted qualification remain separate.
 **Scope:** Active native Kotlin/Compose client only.
 
@@ -23,7 +24,7 @@ For a well-formed wrong-backend record, fail closed before key lookup but retain
 
 Do not use reporting as a validation probe or manufacture a validation endpoint. Restoration does not initiate, verify, report or query. The home card describes historical local recovery and unconfirmed current authorization; Shield permission readiness is explicitly not a successful lookup. Incoming-call events remain independent signed-query triggers.
 
-Well-formed HTTP 403 report `device_not_bound` or query `blacklist_query_unauthorized` invalidates the matching hint, even if verification metadata was not persisted. Match against the current live identity first, then stored identity if no live record exists; stale stored metadata cannot invalidate a newer differently keyed live verification. The query discriminator combines signature/binding rejection, so no revocation claim is made. Malformed envelopes, unrelated signature errors, throttling and temporary network/server failures do not clear a valid hint.
+Well-formed HTTP 401 query `blacklist_query_unauthorized` or HTTP 403 report `device_not_bound` invalidates the matching hint, even if verification metadata was not persisted. Require both the exact status/code pair and the existing validated error envelope; an unexpected HTTP 403 query rejection does not clear recovery. Match against the rejected request's public key and current live identity first, then stored identity if no live record exists; stale stored metadata cannot invalidate a newer differently keyed live verification. The query discriminator combines signature/binding rejection, so no revocation claim is made. Malformed envelopes, unrelated codes, throttling and temporary network/server failures do not clear a valid hint. The existing onboarding ViewModel observes recovery state and the open Activity renders onboarding when verification metadata disappears; background lookup only updates state and returns QueryFailed, never launching an Activity. [CB-11 fix record](../audit/fixes/CB-11-query-authorization-401.md) records the contract correction and validation.
 
 Exclude `device_binding_recovery.xml` from legacy backup, API 31+ cloud backup and device transfer. Matching usable key identity is mandatory even if preferences are copied manually. This is not a CB-05 caller-diagnostic backup/retention fix.
 
