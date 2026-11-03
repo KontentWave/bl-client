@@ -51,7 +51,7 @@ class BlacklistQueryRepositoryImpl(
                 }
             } else {
                 val failure = ApiFailure.parse(response)
-                if (response.code() == 403 && !failure.responseMalformed && failure.code == "blacklist_query_unauthorized") {
+                if (response.code() == 401 && !failure.responseMalformed && failure.code == "blacklist_query_unauthorized") {
                     sessionRecovery?.authorizationRejected(signedPayload.publicKey)
                 }
                 failure.toQueryFailure()
