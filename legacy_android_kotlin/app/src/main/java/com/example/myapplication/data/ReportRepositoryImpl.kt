@@ -29,6 +29,7 @@ class ReportRepositoryImpl(
             )
 
         return try {
+            val recoveryTicket = sessionRecovery?.ticket()
             val signedPayload = signedRequestFactory.createReportRequest(
                 clientPhoneNumber = normalizedClientPhoneNumber,
                 feature = feature.backendKey,
@@ -62,8 +63,11 @@ class ReportRepositoryImpl(
             } else {
                 val failure = ApiFailure.parse(response)
                 if (response.code() == 403 && !failure.responseMalformed && failure.code == "device_not_bound") {
-                    sessionRecovery?.authorizationRejected(signedPayload.publicKey)
+                    sessionRecovery?.authorizationRejected(signedPayload.publicKey, recoveryTicket)
                 }
+                if (response.code() == 403 && !failure.responseMalformed && failure.code == "device_offboarded" &&
+                    !failure.retryable && failure.serverTime != null && failure.lifecycle?.terminal == true && recoveryTicket != null
+                ) sessionRecovery?.applyLifecycle(recoveryTicket, signedPayload.publicKey, failure.lifecycle)
                 failure.toReportFailure()
             }
         } catch (exception: DeviceHardwareSecurityUnavailableException) {

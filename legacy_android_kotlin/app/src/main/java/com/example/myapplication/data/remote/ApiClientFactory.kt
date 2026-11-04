@@ -29,6 +29,9 @@ object ApiClientFactory {
         return createRetrofit(baseUrl, logHttp = false).create(BlacklistApi::class.java)
     }
 
+    fun createLifecycleApi(baseUrl: String): LifecycleApi =
+        createRetrofit(baseUrl, logHttp = false).create(LifecycleApi::class.java)
+
     private fun createRetrofit(baseUrl: String, logHttp: Boolean = true): Retrofit {
         return Retrofit.Builder()
             .baseUrl(baseUrl)

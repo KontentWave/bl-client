@@ -37,12 +37,14 @@ import com.example.myapplication.ui.reporting.ReportViewModel
 import com.example.myapplication.ui.theme.BlacklistClientTheme
 import androidx.lifecycle.ViewModelProvider
 import com.example.myapplication.session.SessionRecoveryProvider
+import com.example.myapplication.session.AndroidRenewalRuntime
 
 data class MainActivityDependencies(
     val onboardingFactory: ViewModelProvider.Factory,
     val reportFactory: ViewModelProvider.Factory,
     val queryFactory: ViewModelProvider.Factory,
     val refreshRecovery: () -> Unit,
+    val renewalForeground: (Boolean) -> Unit = {},
 )
 
 open class MainActivity : ComponentActivity() {
@@ -50,11 +52,13 @@ open class MainActivity : ComponentActivity() {
 
     protected open fun createDependencies(): MainActivityDependencies {
         val recovery = SessionRecoveryProvider.get(applicationContext)
+        val renewal = AndroidRenewalRuntime.get(applicationContext, recovery)
         return MainActivityDependencies(
             OnboardingViewModel.factory(recovery),
             ReportViewModel.factory(recovery),
             BlacklistQueryViewModel.factory(recovery),
             recovery::refresh,
+            renewal::foreground,
         )
     }
 
@@ -107,11 +111,15 @@ open class MainActivity : ComponentActivity() {
                             dependencies.refreshRecovery()
                             shieldReadiness = shieldPermissionChecker.getReadiness(context)
                             shieldLiveStatus = shieldLiveStatusStore.read()
+                            dependencies.renewalForeground(true)
+                        } else if (event == Lifecycle.Event.ON_PAUSE) {
+                            dependencies.renewalForeground(false)
                         }
                     }
 
                     lifecycleOwner.lifecycle.addObserver(observer)
                     onDispose {
+                        dependencies.renewalForeground(false)
                         lifecycleOwner.lifecycle.removeObserver(observer)
                     }
                 }

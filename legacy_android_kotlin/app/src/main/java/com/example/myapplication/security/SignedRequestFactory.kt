@@ -8,6 +8,9 @@ interface SignedRequestFactory {
     fun createReportRequest(clientPhoneNumber: String, feature: String): SignedRequestPayload
 
     fun createBlacklistCheckRequest(targetHash: String): SignedRequestPayload
+
+    fun createLifecycleRequest(requestId: String, enrollmentId: String?, nextRenewalAt: String?): SignedRequestPayload =
+        throw UnsupportedOperationException("Lifecycle signing is unavailable.")
 }
 
 class SecuritySignedRequestFactory(
@@ -39,6 +42,13 @@ class SecuritySignedRequestFactory(
             normalizedPublicKey = normalizedPublicKey,
         )
         return securityManager.createExistingSignedRequestPayload(canonicalPayload, normalizedPublicKey)
+    }
+
+    override fun createLifecycleRequest(requestId: String, enrollmentId: String?, nextRenewalAt: String?): SignedRequestPayload {
+        val publicKey = existingPublicKey()
+        val payload = if (enrollmentId == null) CanonicalPayloadFactory.createLifecycleStatus(requestId, publicKey)
+            else CanonicalPayloadFactory.createRenewal(enrollmentId, requestId, nextRenewalAt, publicKey)
+        return securityManager.createExistingSignedRequestPayload(payload, publicKey)
     }
 
     private fun normalizedPublicKey(): String =
