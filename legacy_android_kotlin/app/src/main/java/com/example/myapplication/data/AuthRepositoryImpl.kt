@@ -114,6 +114,7 @@ class AuthRepositoryImpl(
                         challengeId = body.data.challengeId,
                         maskedPhoneNumber = body.data.maskedPhoneNumber,
                         verifiedAt = body.data.verifiedAt,
+                        lifecycle = body.data.lifecycle?.let(com.example.myapplication.session.EnrollmentLifecycle::parse),
                     )
                 } else {
                     VerifyAuthResult.Failure(
@@ -178,4 +179,3 @@ class AuthRepositoryImpl(
             .digest(toByteArray(Charsets.UTF_8))
             .joinToString(separator = "") { eachByte -> "%02x".format(eachByte) }
 }
-

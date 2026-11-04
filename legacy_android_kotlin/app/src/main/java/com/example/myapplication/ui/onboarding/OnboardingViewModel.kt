@@ -51,7 +51,10 @@ class OnboardingViewModel(
             viewModelScope.launch {
                 sessionRecovery.state.collect { recovery ->
                     _uiState.update {
-                        it.copy(
+                        if (recovery.offboarded) OnboardingUiState(
+                            generalError = recovery.message,
+                            retryAfterSeconds = cooldown.remainingSeconds,
+                        ) else it.copy(
                             verifiedAt = recovery.metadata?.verifiedAt,
                             isSessionRestored = recovery.restored,
                             generalError = recovery.message,
@@ -299,7 +302,7 @@ class OnboardingViewModel(
                 )
             ) {
                 is VerifyAuthResult.Success -> {
-                    sessionRecovery?.recordVerified(signedPayload.publicKey, result.verifiedAt)
+                    sessionRecovery?.recordVerified(signedPayload.publicKey, result.verifiedAt, result.lifecycle)
                     _uiState.update {
                         it.copy(
                             isVerifying = false,

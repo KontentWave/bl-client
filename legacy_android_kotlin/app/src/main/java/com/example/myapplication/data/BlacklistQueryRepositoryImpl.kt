@@ -24,6 +24,7 @@ class BlacklistQueryRepositoryImpl(
         val normalizedTargetHash = targetHash.trim().lowercase()
 
         return try {
+            val recoveryTicket = sessionRecovery?.ticket()
             val signedPayload = runInterruptible(Dispatchers.IO) {
                 signedRequestFactory.createBlacklistCheckRequest(normalizedTargetHash)
             }
@@ -52,8 +53,11 @@ class BlacklistQueryRepositoryImpl(
             } else {
                 val failure = ApiFailure.parse(response)
                 if (response.code() == 401 && !failure.responseMalformed && failure.code == "blacklist_query_unauthorized") {
-                    sessionRecovery?.authorizationRejected(signedPayload.publicKey)
+                    sessionRecovery?.authorizationRejected(signedPayload.publicKey, recoveryTicket)
                 }
+                if (response.code() == 403 && !failure.responseMalformed && failure.code == "device_offboarded" &&
+                    !failure.retryable && failure.serverTime != null && failure.lifecycle?.terminal == true && recoveryTicket != null
+                ) sessionRecovery?.applyLifecycle(recoveryTicket, signedPayload.publicKey, failure.lifecycle)
                 failure.toQueryFailure()
             }
         } catch (exception: DeviceHardwareSecurityUnavailableException) {

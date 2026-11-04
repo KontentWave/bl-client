@@ -198,4 +198,31 @@ class SessionAuthorizationTest {
         assertNotNull(recovery.state.value.metadata)
         assertEquals(saved, store.values)
     }
+
+    @Test fun confirmedOffboardingFromIncomingQueryClearsHintWithoutEnrollmentReplay() = runBlocking {
+        val auth = object : AuthRepository {
+            override suspend fun initiateOwnerAuth(phoneNumber: String): InitiateAuthResult = error("No automatic enrollment")
+            override suspend fun initiateAuth(adUrl: String): InitiateAuthResult = error("No automatic SMS")
+            override suspend fun verifyAuth(challengeId: String, otp: String, publicKey: String, signature: String): VerifyAuthResult =
+                error("No automatic OTP verification")
+        }
+        val onboarding = OnboardingViewModel(auth, signer, diagnosticsEnabled = false, sessionRecovery = recovery)
+        viewModels.put("offboarding", onboarding)
+        scheduler.runCurrent()
+        onboarding.onAdUrlChanged("https://portal.example.test/remembered-input")
+        server.enqueue(MockResponse().setResponseCode(403).setBody(
+            """{"success":false,"code":"device_offboarded","message":"The enrolled ad is inactive.","errors":{"authorization":["The enrolled ad is inactive."]},"meta":{"retryable":false,"server_time":"2030-01-02T00:00:00Z","lifecycle":{"enrollment_id":"11111111-1111-4111-8111-111111111111","kind":"ad","state":"offboarded","version":2,"verified_at":"2030-01-01T00:00:00Z","last_renewed_at":null,"next_renewal_at":null,"offboarded_at":"2030-01-02T00:00:00Z","reason":"ad_disabled"}}}""",
+        ))
+        val result = com.example.myapplication.shield.IncomingCallProcessor(queries()).lookup("+421900000001")
+        assertEquals(com.example.myapplication.shield.ShieldLiveStage.QueryFailed, result.stage)
+        assertNull(recovery.state.value.metadata)
+        assertEquals(1, server.requestCount)
+        assertTrue(recovery.state.value.message!!.contains("inactive"))
+        scheduler.runCurrent()
+        assertFalse(onboarding.uiState.value.isVerified)
+        assertEquals("", onboarding.uiState.value.adUrl)
+        assertEquals("", onboarding.uiState.value.ownerPhoneNumber)
+        assertEquals("", onboarding.uiState.value.otp)
+        assertNull(onboarding.uiState.value.challengeId)
+    }
 }

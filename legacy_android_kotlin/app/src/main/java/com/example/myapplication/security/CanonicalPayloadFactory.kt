@@ -27,7 +27,17 @@ object CanonicalPayloadFactory {
             "public_key" to normalizedPublicKey,
         )
 
-    private fun createOrderedJson(vararg fields: Pair<String, String>): String =
+    fun createLifecycleStatus(requestId: String, publicKey: String): String = createOrderedJson(
+        "operation" to "auth.status", "request_id" to requestId, "public_key" to publicKey,
+    )
+
+    fun createRenewal(enrollmentId: String, requestId: String, nextRenewalAt: String?, publicKey: String): String =
+        createOrderedJson(
+            "operation" to "auth.renew", "enrollment_id" to enrollmentId, "request_id" to requestId,
+            "next_renewal_at" to nextRenewalAt, "public_key" to publicKey,
+        )
+
+    private fun createOrderedJson(vararg fields: Pair<String, String?>): String =
         buildString {
             append('{')
             fields.forEachIndexed { index, (key, value) ->
@@ -36,9 +46,12 @@ object CanonicalPayloadFactory {
                 }
                 append('"')
                 append(key)
-                append("\":\"")
-                append(value.escapeJson())
-                append('"')
+                append("\":")
+                if (value == null) append("null") else {
+                    append('"')
+                    append(value.escapeJson())
+                    append('"')
+                }
             }
             append('}')
         }
@@ -66,4 +79,3 @@ object CanonicalPayloadFactory {
         }
     }
 }
-

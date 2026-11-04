@@ -8,6 +8,8 @@
 **Status:** Accepted; CB-01 source merged through PR #1 and retained in main `4b50be5009ddb52688cbdda0b361b47f65986e6d`. Beta distribution and actual device/hosted qualification remain separate.
 **Scope:** Active native Kotlin/Compose client only.
 
+**Lifecycle extension, November 3:** owner-approved [ADR-006](006-coordinated-renewal-and-offboarding.md) supersedes this ADR's original no-status-endpoint/no-background-renewal limitation. Version 1 still restores without enrollment replay; version 2 adds minimal lifecycle/retry metadata, existing-key signed status/renewal, generation-checked responses and durable authoritative offboarding. No ad, phone, OTP, remembered form input or signed request is persisted. Background work never launches UI or sends SMS. CB-11's exact status/code discriminator and report rejection remain intact, with request-generation protection added for newer same-key verification. This extension is local source work, not deployed behavior or device qualification.
+
 ## Context
 
 Activity-owned onboarding state survives configuration changes but not process death. The Android Keystore key/server binding can remain intact while the UI returns to SMS onboarding. The documented contract exposes initiate, verify, report and blacklist-check operations, but no dedicated read-only session-validation operation. A key's mere existence is not proof that the server ever bound it.

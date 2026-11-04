@@ -35,6 +35,7 @@ sealed interface VerifyAuthResult {
         val challengeId: String,
         val maskedPhoneNumber: String,
         val verifiedAt: String,
+        val lifecycle: com.example.myapplication.session.EnrollmentLifecycle? = null,
     ) : VerifyAuthResult
 
     data class Failure(
@@ -46,4 +47,3 @@ sealed interface VerifyAuthResult {
         val responseMalformed: Boolean = false,
     ) : VerifyAuthResult
 }
-

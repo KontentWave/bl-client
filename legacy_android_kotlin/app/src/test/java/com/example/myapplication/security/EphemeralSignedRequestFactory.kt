@@ -23,6 +23,10 @@ class EphemeralSignedRequestFactory : SignedRequestFactory {
     override fun createBlacklistCheckRequest(targetHash: String) =
         sign(CanonicalPayloadFactory.createBlacklistCheck(targetHash, publicKeyPem))
 
+    override fun createLifecycleRequest(requestId: String, enrollmentId: String?, nextRenewalAt: String?) =
+        sign(if (enrollmentId == null) CanonicalPayloadFactory.createLifecycleStatus(requestId, publicKeyPem)
+            else CanonicalPayloadFactory.createRenewal(enrollmentId, requestId, nextRenewalAt, publicKeyPem))
+
     private fun sign(payload: String): SignedRequestPayload {
         val signature = Signature.getInstance("SHA256withECDSA")
         signature.initSign(keyPair.private)
